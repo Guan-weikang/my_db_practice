@@ -23,6 +23,9 @@ class Marriage(Base):
         CheckConstraint("member_id_1 <> member_id_2", name="chk_marriage_distinct"),
         CheckConstraint("member_id_1 < member_id_2", name="chk_marriage_order"),
         CheckConstraint("status IN ('active', 'ended')", name="chk_marriage_status"),
+        CheckConstraint("married_at IS NULL OR ended_at IS NULL OR ended_at >= married_at", name="chk_marriage_date_order"),
+        CheckConstraint("status <> 'active' OR ended_at IS NULL", name="chk_marriage_active_ended_at"),
+        CheckConstraint("status <> 'ended' OR ended_at IS NOT NULL", name="chk_marriage_ended_requires_date"),
         Index("idx_marriage_tree_member1", "tree_id", "member_id_1"),
         Index("idx_marriage_tree_member2", "tree_id", "member_id_2"),
     )

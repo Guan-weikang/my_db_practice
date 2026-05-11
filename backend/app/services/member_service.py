@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import bad_request, not_found
 from app.repositories.member_repository import MemberRepository
+from app.repositories.relationship_repository import RelationshipRepository
 from app.schemas.member import (
     MemberCreateRequest,
     MemberDetailResponse,
@@ -15,6 +16,7 @@ class MemberService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.member_repository = MemberRepository(session)
+        self.relationship_repository = RelationshipRepository(session)
 
     async def list_by_tree(self, *, tree_id: int, page: int, page_size: int) -> PaginatedMemberResponse:
         offset = (page - 1) * page_size
@@ -49,6 +51,7 @@ class MemberService:
 
     async def delete(self, *, tree_id: int, member_id: int) -> None:
         member = await self._get_member_or_raise(tree_id=tree_id, member_id=member_id)
+        await self.relationship_repository.delete_relations_for_member(tree_id=tree_id, member_id=member.member_id)
         await self.member_repository.delete(member)
         await self.session.commit()
 
