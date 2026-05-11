@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tree_collaborator import TreeCollaborator
@@ -17,3 +17,6 @@ class CollaboratorRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def delete_by_tree_id(self, tree_id: int) -> None:
+        await self.session.execute(delete(TreeCollaborator).where(TreeCollaborator.tree_id == tree_id))

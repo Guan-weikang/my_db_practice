@@ -265,7 +265,7 @@ async def test_family_tree_permissions_for_reader_editor_creator(client, db_sess
         headers={"Authorization": f"Bearer {collaborator_token}"},
     )
     assert collaborator_patch_response.status_code == 200
-    assert collaborator_patch_response.json()["role"] == "collaborator"
+    assert collaborator_patch_response.json()["access_role"] == "collaborator"
 
     reader_patch_response = await client.patch(
         f"/api/v1/family-trees/{tree.tree_id}",
@@ -279,14 +279,14 @@ async def test_family_tree_permissions_for_reader_editor_creator(client, db_sess
         headers={"Authorization": f"Bearer {creator_token}"},
     )
     assert creator_delete_response.status_code == 200
-    assert creator_delete_response.json()["role"] == "creator"
+    assert creator_delete_response.json()["message"] == f"Family tree {tree.tree_id} deleted"
 
     outsider_get_response = await client.get(
         f"/api/v1/family-trees/{tree.tree_id}",
         headers={"Authorization": f"Bearer {outsider_token}"},
     )
-    assert outsider_get_response.status_code == 403
-    assert outsider_get_response.json()["code"] == "PERMISSION_DENIED"
+    assert outsider_get_response.status_code == 404
+    assert outsider_get_response.json()["code"] == "NOT_FOUND"
 
 
 async def test_accessible_family_trees_requires_authentication(client, db_session):
