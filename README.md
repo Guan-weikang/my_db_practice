@@ -20,6 +20,8 @@
 - 后端最小测试基座已建立，并包含健康检查与错误响应冒烟测试
 - 阶段二后端认证闭环已接入：注册、登录、刷新令牌、登出、当前用户与族谱权限依赖
 - 前端已接入登录态持久化、令牌自动续期、路由守卫和最小登录/注册页面
+- 阶段三族谱与协作者模块已完成最小闭环：族谱 CRUD、协作者管理、前端列表/详情/协作者管理页已可联调
+- 当前阶段三权限规则已固定为：所有已登录用户默认可读取所有族谱；`creator` 可管理协作者和删除空族谱；`collaborator` 可编辑族谱但不可管理协作者；`reader` 与未显式授权用户只读
 
 ## 环境要求
 
@@ -45,6 +47,11 @@ cp frontend/.env.example frontend/.env.development
 前端默认 API 地址：
 
 - `VITE_API_BASE_URL=http://localhost:8000/api/v1`
+
+联调注意：
+
+- 若前端使用 `http://127.0.0.1:5173` 或 `http://127.0.0.1:4173` 访问，而后端 CORS 只放行 `http://localhost:5173`，浏览器会在登录前的 `OPTIONS` 预检阶段直接失败。
+- 手工联调时应保证前端访问地址与 `backend/.env` 中的 CORS 白名单一致。
 
 前端阶段二默认使用：
 
@@ -132,19 +139,29 @@ cd frontend
 npm run build
 ```
 
+阶段三补充验证：
+
+```bash
+python scripts/dev/seed_stage3_manual_test_data.py
+bash /home/mochen/db_practice/scripts/dev/stage3_probe.sh
+```
+
 ## 目录说明
 
 - `backend/tests/api/`：后端 API 冒烟测试
 - `backend/tests/services/`：后续服务层测试
 - `backend/tests/queries/`：后续查询层测试
 - `scripts/sql/`：数据库初始化 SQL 脚本
+- `scripts/dev/seed_stage3_manual_test_data.py`：阶段三联调种子数据脚本
+- `scripts/dev/stage3_probe.sh`：阶段三接口与权限快速探测脚本
 - `deploy/`：当前为空目录，留待后续阶段补充 Docker Compose、Nginx 和部署文件
 - `docs/寻根溯源族谱管理系统-总开发计划.md`：总开发计划
 - `docs/阶段一-工程基线与开发环境收口-详细执行与测试验收文档.md`：阶段一详细计划
+- `docs/阶段三-族谱与协作者模块-详细执行与测试验收文档.md`：阶段三详细计划
+- `docs/阶段三-工作包H-测试环境准备与手工联调说明.md`：阶段三联调与测试数据说明
 
 ## 后续工作
 
-- 阶段二剩余：认证异常/文档收口与联调补充
-- 阶段三：族谱与协作者模块
+- 阶段三收尾：文档、联调说明与验收记录收口
 - 阶段四：成员与关系维护
 - 阶段五及之后：复杂查询、统计、数据生成、性能优化、联调与部署
