@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
+import logging
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,8 @@ from app.core.exceptions import forbidden, not_found
 from app.models.user_account import UserAccount
 from app.repositories.collaborator_repository import CollaboratorRepository
 from app.repositories.family_tree_repository import FamilyTreeRepository
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,8 +42,21 @@ def _require_tree_role(*allowed_roles: str) -> Callable[..., TreePermissionConte
             role = await collaborator_repository.get_active_role(tree_id=tree_id, user_id=current_user.user_id)
 
         if role is None:
+            logger.warning(
+                "permission_denied reason=no_tree_access tree_id=%s user_id=%s allowed_roles=%s",
+                tree_id,
+                current_user.user_id,
+                ",".join(allowed_roles),
+            )
             raise forbidden("You do not have access to this family tree")
         if role not in allowed_roles:
+            logger.warning(
+                "permission_denied reason=role_mismatch tree_id=%s user_id=%s role=%s allowed_roles=%s",
+                tree_id,
+                current_user.user_id,
+                role,
+                ",".join(allowed_roles),
+            )
             raise forbidden("You do not have permission to perform this action")
 
         return TreePermissionContext(tree_id=tree_id, user_id=current_user.user_id, role=role)

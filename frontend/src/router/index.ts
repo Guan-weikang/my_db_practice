@@ -2,6 +2,8 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router"
 
 import AuthLayout from "../layouts/AuthLayout.vue";
 import DefaultLayout from "../layouts/DefaultLayout.vue";
+import { useAuthStore } from "../stores/auth";
+import { pinia } from "../stores/pinia";
 import LoginView from "../views/auth/LoginView.vue";
 import RegisterView from "../views/auth/RegisterView.vue";
 import DashboardView from "../views/dashboard/DashboardView.vue";
@@ -18,28 +20,52 @@ const routes: RouteRecordRaw[] = [
     path: "/auth",
     component: AuthLayout,
     children: [
-      { path: "login", component: LoginView },
-      { path: "register", component: RegisterView }
+      { path: "", redirect: { name: "login" } },
+      { path: "login", name: "login", component: LoginView, meta: { guestOnly: true } },
+      { path: "register", name: "register", component: RegisterView, meta: { guestOnly: true } }
     ]
   },
   {
     path: "/",
     component: DefaultLayout,
+    meta: { requiresAuth: true },
     children: [
-      { path: "", component: DashboardView },
-      { path: "family-trees", component: FamilyTreeListView },
-      { path: "family-trees/:treeId", component: FamilyTreeDetailView },
-      { path: "family-trees/:treeId/collaborators", component: CollaboratorManageView },
-      { path: "family-trees/:treeId/members", component: MemberListView },
-      { path: "family-trees/:treeId/members/:memberId", component: MemberDetailView },
-      { path: "family-trees/:treeId/query/ancestors", component: AncestorQueryView },
-      { path: "family-trees/:treeId/query/kinship", component: KinshipQueryView }
+      { path: "", name: "dashboard", component: DashboardView },
+      { path: "family-trees", name: "family-tree-list", component: FamilyTreeListView },
+      { path: "family-trees/:treeId", name: "family-tree-detail", component: FamilyTreeDetailView },
+      { path: "family-trees/:treeId/collaborators", name: "collaborators", component: CollaboratorManageView },
+      { path: "family-trees/:treeId/members", name: "member-list", component: MemberListView },
+      { path: "family-trees/:treeId/members/:memberId", name: "member-detail", component: MemberDetailView },
+      { path: "family-trees/:treeId/query/ancestors", name: "ancestor-query", component: AncestorQueryView },
+      { path: "family-trees/:treeId/query/kinship", name: "kinship-query", component: KinshipQueryView }
     ]
   }
 ];
 
-export default createRouter({
+const router = createRouter({
   history: createWebHistory(),
   routes
 });
 
+router.beforeEach(async (to) => {
+  const authStore = useAuthStore(pinia);
+  await authStore.initialize();
+
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    return {
+      name: "login",
+      query: {
+        redirect: to.fullPath
+      }
+    };
+  }
+
+  if (to.meta.guestOnly && authStore.isAuthenticated) {
+    const redirect = typeof to.query.redirect === "string" ? to.query.redirect : "/";
+    return redirect;
+  }
+
+  return true;
+});
+
+export default router;

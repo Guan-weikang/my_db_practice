@@ -18,6 +18,8 @@
 - FastAPI 应用可启动，已接入基础 CORS、日志、统一错误响应和健康检查
 - 前端可启动并成功构建
 - 后端最小测试基座已建立，并包含健康检查与错误响应冒烟测试
+- 阶段二后端认证闭环已接入：注册、登录、刷新令牌、登出、当前用户与族谱权限依赖
+- 前端已接入登录态持久化、令牌自动续期、路由守卫和最小登录/注册页面
 
 ## 环境要求
 
@@ -43,6 +45,12 @@ cp frontend/.env.example frontend/.env.development
 前端默认 API 地址：
 
 - `VITE_API_BASE_URL=http://localhost:8000/api/v1`
+
+前端阶段二默认使用：
+
+- `localStorage` 持久化 `accessToken`、`refreshToken` 和当前用户信息
+- Axios 响应拦截器在收到 `401` 时自动尝试 `POST /auth/refresh`
+- 刷新失败后清空登录态，并由路由守卫带回登录页
 
 ## 安装依赖
 
@@ -81,6 +89,13 @@ curl http://localhost:8000/api/v1/health/
 cd frontend
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
+
+阶段二前端认证主流程：
+
+1. 访问受保护路由时，未登录会自动跳转到 `/auth/login?redirect=原目标路径`
+2. 登录或注册成功后，前端自动保存会话并跳回原目标路径
+3. 刷新页面时，前端会先恢复本地会话，再通过 `/api/v1/auth/me` 校验当前登录态
+4. Access Token 失效时，前端会自动使用 Refresh Token 续期
 
 ## Alembic
 
@@ -129,7 +144,7 @@ npm run build
 
 ## 后续工作
 
-- 阶段二：认证与权限闭环
+- 阶段二剩余：认证异常/文档收口与联调补充
 - 阶段三：族谱与协作者模块
 - 阶段四：成员与关系维护
 - 阶段五及之后：复杂查询、统计、数据生成、性能优化、联调与部署

@@ -2,8 +2,10 @@ import { useAuthStore } from "../stores/auth";
 
 export function useAuth() {
   const store = useAuthStore();
+
   return {
-    store
+    store,
+    user: store.currentUser,
+    isAuthenticated: store.isAuthenticated
   };
 }
-
