@@ -4,6 +4,7 @@ import pytest
 
 from app.core.security import create_access_token, hash_password
 from app.models.family_tree import FamilyTree
+from app.models.member import Member
 from app.models.tree_collaborator import TreeCollaborator
 from app.models.user_account import UserAccount
 
@@ -61,6 +62,25 @@ async def _grant_role(db_session, *, tree_id: int, user_id: int, invited_by: int
     )
     await db_session.flush()
     await db_session.commit()
+
+
+async def _create_member(
+    db_session,
+    *,
+    tree_id: int,
+    name: str = "Member One",
+    gender: str = "unknown",
+) -> Member:
+    member = Member(
+        tree_id=tree_id,
+        name=name,
+        gender=gender,
+        is_alive=True,
+    )
+    db_session.add(member)
+    await db_session.flush()
+    await db_session.commit()
+    return member
 
 
 async def test_register_returns_session_and_hashes_password(client, db_session):
@@ -310,3 +330,127 @@ async def test_accessible_family_trees_requires_authentication(client, db_sessio
     )
     assert accessible_response.status_code == 200
     assert accessible_response.json()["items"][0]["access_role"] == "creator"
+
+
+async def test_family_tree_crud_flow(client, db_session):
+    username = _unique("crud_user")
+    collaborator_username = _unique("crud_collaborator")
+    user = await _create_user(db_session, username=username, email=f"{username}@example.com")
+    collaborator = await _create_user(
+        db_session,
+        username=collaborator_username,
+        email=f"{collaborator_username}@example.com",
+    )
+
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": "Password123"},
+    )
+    access_token = login_response.json()["access_token"]
+
+    create_response = await client.post(
+        "/api/v1/family-trees/",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "tree_name": "  Zhang Family Archive  ",
+            "surname": "  Zhang ",
+            "compiled_at": "2026-05-11",
+            "description": "  initial description  ",
+        },
+    )
+    assert create_response.status_code == 201
+    created_tree = create_response.json()
+    assert created_tree["tree_name"] == "Zhang Family Archive"
+    assert created_tree["surname"] == "Zhang"
+    assert created_tree["compiled_at"] == "2026-05-11"
+    assert created_tree["description"] == "initial description"
+
+    tree_id = created_tree["tree_id"]
+    tree = await db_session.get(FamilyTree, tree_id)
+    assert tree is not None
+    assert tree.creator_user_id == user.user_id
+
+    list_response = await client.get(
+        "/api/v1/family-trees/?page=1&page_size=10",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert list_response.status_code == 200
+    list_payload = list_response.json()
+    assert list_payload["total"] >= 1
+    assert any(item["tree_id"] == tree_id and item["access_role"] == "creator" for item in list_payload["items"])
+
+    detail_response = await client.get(
+        f"/api/v1/family-trees/{tree_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["access_role"] == "creator"
+
+    await _grant_role(
+        db_session,
+        tree_id=tree_id,
+        user_id=collaborator.user_id,
+        invited_by=user.user_id,
+        access_role="collaborator",
+    )
+    collaborator_login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": collaborator_username, "password": "Password123"},
+    )
+    collaborator_token = collaborator_login_response.json()["access_token"]
+
+    update_response = await client.patch(
+        f"/api/v1/family-trees/{tree_id}",
+        headers={"Authorization": f"Bearer {collaborator_token}"},
+        json={
+            "tree_name": "Updated Zhang Family",
+            "description": "  revised description ",
+        },
+    )
+    assert update_response.status_code == 200
+    updated_tree = update_response.json()
+    assert updated_tree["tree_name"] == "Updated Zhang Family"
+    assert updated_tree["description"] == "revised description"
+    assert updated_tree["access_role"] == "collaborator"
+
+    refreshed_tree = await db_session.get(FamilyTree, tree_id)
+    assert refreshed_tree is not None
+    await db_session.refresh(refreshed_tree)
+    assert refreshed_tree.tree_name == "Updated Zhang Family"
+    assert refreshed_tree.description == "revised description"
+
+    delete_response = await client.delete(
+        f"/api/v1/family-trees/{tree_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert delete_response.status_code == 200
+    assert delete_response.json()["message"] == f"Family tree {tree_id} deleted"
+
+    deleted_detail_response = await client.get(
+        f"/api/v1/family-trees/{tree_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert deleted_detail_response.status_code == 404
+    assert deleted_detail_response.json()["code"] == "NOT_FOUND"
+
+
+async def test_family_tree_delete_rejects_non_empty_tree(client, db_session):
+    username = _unique("delete_user")
+    user = await _create_user(db_session, username=username, email=f"{username}@example.com")
+    tree = await _create_tree(db_session, creator_user_id=user.user_id, tree_name="Protected Tree")
+    await _create_member(db_session, tree_id=tree.tree_id, name="Ancestor Root")
+
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": "Password123"},
+    )
+    access_token = login_response.json()["access_token"]
+
+    delete_response = await client.delete(
+        f"/api/v1/family-trees/{tree.tree_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert delete_response.status_code == 409
+    assert delete_response.json()["code"] == "CONFLICT"
+    assert delete_response.json()["message"] == "Only empty family trees can be physically deleted at this stage"
+    assert await db_session.get(FamilyTree, tree.tree_id) is not None

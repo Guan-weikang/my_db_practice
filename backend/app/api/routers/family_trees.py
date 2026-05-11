@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query, status
 
 from app.api.deps.auth import get_current_active_user
 from app.api.deps.db import get_db_session
@@ -36,7 +36,7 @@ async def list_family_trees(
     )
 
 
-@router.post("/", response_model=FamilyTreeResponse)
+@router.post("/", response_model=FamilyTreeResponse, status_code=status.HTTP_201_CREATED)
 async def create_family_tree(
     payload: FamilyTreeCreateRequest,
     current_user: UserAccount = Depends(get_current_active_user),

@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import case, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,7 +96,7 @@ class FamilyTreeRepository:
     async def update(self, tree: FamilyTree, values: Mapping[str, object | None]) -> FamilyTree:
         for field_name, value in values.items():
             setattr(tree, field_name, value)
-        tree.updated_at = datetime.utcnow()
+        tree.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await self.session.flush()
         return tree
 

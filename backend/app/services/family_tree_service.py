@@ -1,8 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import bad_request, not_found
+from app.core.exceptions import bad_request, conflict, not_found
 from app.repositories.collaborator_repository import CollaboratorRepository
 from app.repositories.family_tree_repository import FamilyTreeRepository
+from app.repositories.member_repository import MemberRepository
 from app.schemas.family_tree import (
     AccessibleFamilyTreeListItem,
     FamilyTreeCreateRequest,
@@ -18,6 +19,7 @@ class FamilyTreeService:
         self.session = session
         self.family_tree_repository = FamilyTreeRepository(session)
         self.collaborator_repository = CollaboratorRepository(session)
+        self.member_repository = MemberRepository(session)
 
     async def list_accessible_for_user(
         self,
@@ -92,6 +94,9 @@ class FamilyTreeService:
         tree = await self.family_tree_repository.get_by_id(tree_id)
         if tree is None:
             raise not_found("Family tree not found")
+        member_count = await self.member_repository.count_by_tree_id(tree_id)
+        if member_count > 0:
+            raise conflict("Only empty family trees can be physically deleted at this stage")
         await self.collaborator_repository.delete_by_tree_id(tree_id)
         await self.family_tree_repository.delete(tree)
         await self.session.commit()
