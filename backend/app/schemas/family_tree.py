@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from datetime import date
+
+from pydantic import BaseModel, ConfigDict
 
 
 class FamilyTreeCreate(BaseModel):
@@ -8,8 +10,14 @@ class FamilyTreeCreate(BaseModel):
 
 
 class FamilyTreeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     tree_id: int
     tree_name: str
     surname: str
+    compiled_at: date | None = None
     description: str | None = None
 
+
+class AccessibleFamilyTreeResponse(FamilyTreeResponse):
+    access_role: str
