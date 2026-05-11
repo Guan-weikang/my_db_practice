@@ -311,7 +311,9 @@ async def test_family_tree_permissions_for_reader_editor_creator(client, db_sess
 
 async def test_accessible_family_trees_requires_authentication(client, db_session):
     username = _unique("tree_user")
+    outsider_username = _unique("tree_outsider")
     user = await _create_user(db_session, username=username, email=f"{username}@example.com")
+    outsider = await _create_user(db_session, username=outsider_username, email=f"{outsider_username}@example.com")
     await _create_tree(db_session, creator_user_id=user.user_id, tree_name="Visible Tree")
 
     anonymous_response = await client.get("/api/v1/family-trees/accessible")
@@ -330,6 +332,18 @@ async def test_accessible_family_trees_requires_authentication(client, db_sessio
     )
     assert accessible_response.status_code == 200
     assert accessible_response.json()["items"][0]["access_role"] == "creator"
+
+    outsider_login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": outsider_username, "password": "Password123"},
+    )
+    outsider_access_token = outsider_login_response.json()["access_token"]
+    outsider_accessible_response = await client.get(
+        "/api/v1/family-trees/accessible",
+        headers={"Authorization": f"Bearer {outsider_access_token}"},
+    )
+    assert outsider_accessible_response.status_code == 200
+    assert any(item["access_role"] == "reader" for item in outsider_accessible_response.json()["items"])
 
 
 async def test_family_tree_crud_flow(client, db_session):
@@ -454,3 +468,185 @@ async def test_family_tree_delete_rejects_non_empty_tree(client, db_session):
     assert delete_response.json()["code"] == "CONFLICT"
     assert delete_response.json()["message"] == "Only empty family trees can be physically deleted at this stage"
     assert await db_session.get(FamilyTree, tree.tree_id) is not None
+
+
+async def test_collaborator_management_flow(client, db_session):
+    creator_username = _unique("owner_user")
+    collaborator_username = _unique("manage_collab")
+    reader_username = _unique("manage_reader")
+    creator = await _create_user(db_session, username=creator_username, email=f"{creator_username}@example.com")
+    collaborator = await _create_user(
+        db_session,
+        username=collaborator_username,
+        email=f"{collaborator_username}@example.com",
+        display_name="Managed Collaborator",
+    )
+    reader = await _create_user(
+        db_session,
+        username=reader_username,
+        email=f"{reader_username}@example.com",
+        display_name="Managed Reader",
+    )
+    tree = await _create_tree(db_session, creator_user_id=creator.user_id, tree_name="Collaborator Tree")
+
+    creator_login = await client.post(
+        "/api/v1/auth/login",
+        json={"username": creator_username, "password": "Password123"},
+    )
+    creator_token = creator_login.json()["access_token"]
+
+    invite_collaborator_response = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"user_id": collaborator.user_id, "access_role": "collaborator"},
+    )
+    assert invite_collaborator_response.status_code == 200
+    assert invite_collaborator_response.json()["user_id"] == collaborator.user_id
+    assert invite_collaborator_response.json()["access_role"] == "collaborator"
+    assert invite_collaborator_response.json()["username"] == collaborator.username
+
+    invite_reader_response = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"user_id": reader.user_id, "access_role": "reader"},
+    )
+    assert invite_reader_response.status_code == 200
+    assert invite_reader_response.json()["access_role"] == "reader"
+
+    list_response = await client.get(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/?page=1&page_size=10",
+        headers={"Authorization": f"Bearer {creator_token}"},
+    )
+    assert list_response.status_code == 200
+    list_payload = list_response.json()
+    assert list_payload["total"] == 2
+    listed_roles = {item["user_id"]: item["access_role"] for item in list_payload["items"]}
+    assert listed_roles[collaborator.user_id] == "collaborator"
+    assert listed_roles[reader.user_id] == "reader"
+
+    update_response = await client.patch(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/{reader.user_id}",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"access_role": "collaborator"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["access_role"] == "collaborator"
+
+    revoke_response = await client.delete(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/{collaborator.user_id}",
+        headers={"Authorization": f"Bearer {creator_token}"},
+    )
+    assert revoke_response.status_code == 200
+    assert revoke_response.json()["message"] == f"Collaborator {collaborator.user_id} revoked from family tree {tree.tree_id}"
+
+    post_revoke_list_response = await client.get(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/",
+        headers={"Authorization": f"Bearer {creator_token}"},
+    )
+    assert post_revoke_list_response.status_code == 200
+    post_revoke_items = {item["user_id"]: item for item in post_revoke_list_response.json()["items"]}
+    assert post_revoke_items[collaborator.user_id]["status"] == "revoked"
+    assert post_revoke_items[reader.user_id]["access_role"] == "collaborator"
+
+    collaborator_login = await client.post(
+        "/api/v1/auth/login",
+        json={"username": collaborator_username, "password": "Password123"},
+    )
+    revoked_collaborator_token = collaborator_login.json()["access_token"]
+    revoked_detail_response = await client.get(
+        f"/api/v1/family-trees/{tree.tree_id}",
+        headers={"Authorization": f"Bearer {revoked_collaborator_token}"},
+    )
+    assert revoked_detail_response.status_code == 200
+    assert revoked_detail_response.json()["access_role"] == "reader"
+
+
+async def test_collaborator_management_rejects_invalid_operations(client, db_session):
+    creator_username = _unique("owner_invalid")
+    collaborator_username = _unique("collab_invalid")
+    reader_username = _unique("reader_invalid")
+    outsider_username = _unique("outsider_invalid")
+    creator = await _create_user(db_session, username=creator_username, email=f"{creator_username}@example.com")
+    collaborator = await _create_user(db_session, username=collaborator_username, email=f"{collaborator_username}@example.com")
+    reader = await _create_user(db_session, username=reader_username, email=f"{reader_username}@example.com")
+    outsider = await _create_user(db_session, username=outsider_username, email=f"{outsider_username}@example.com")
+    tree = await _create_tree(db_session, creator_user_id=creator.user_id, tree_name="Invalid Operations Tree")
+    await _grant_role(
+        db_session,
+        tree_id=tree.tree_id,
+        user_id=collaborator.user_id,
+        invited_by=creator.user_id,
+        access_role="collaborator",
+    )
+    await _grant_role(
+        db_session,
+        tree_id=tree.tree_id,
+        user_id=reader.user_id,
+        invited_by=creator.user_id,
+        access_role="reader",
+    )
+
+    creator_token = (
+        await client.post("/api/v1/auth/login", json={"username": creator_username, "password": "Password123"})
+    ).json()["access_token"]
+    collaborator_token = (
+        await client.post("/api/v1/auth/login", json={"username": collaborator_username, "password": "Password123"})
+    ).json()["access_token"]
+    reader_token = (
+        await client.post("/api/v1/auth/login", json={"username": reader_username, "password": "Password123"})
+    ).json()["access_token"]
+    outsider_token = (
+        await client.post("/api/v1/auth/login", json={"username": outsider_username, "password": "Password123"})
+    ).json()["access_token"]
+
+    duplicate_invite_response = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"user_id": collaborator.user_id, "access_role": "collaborator"},
+    )
+    assert duplicate_invite_response.status_code == 409
+    assert duplicate_invite_response.json()["code"] == "CONFLICT"
+
+    self_invite_response = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"user_id": creator.user_id, "access_role": "reader"},
+    )
+    assert self_invite_response.status_code == 409
+
+    not_found_invite_response = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"user_id": 999999999, "access_role": "reader"},
+    )
+    assert not_found_invite_response.status_code == 404
+    assert not_found_invite_response.json()["code"] == "NOT_FOUND"
+
+    creator_role_update_response = await client.patch(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/{creator.user_id}",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"access_role": "reader"},
+    )
+    assert creator_role_update_response.status_code == 409
+
+    collaborator_manage_response = await client.get(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/",
+        headers={"Authorization": f"Bearer {collaborator_token}"},
+    )
+    assert collaborator_manage_response.status_code == 403
+    assert collaborator_manage_response.json()["code"] == "PERMISSION_DENIED"
+
+    reader_manage_response = await client.delete(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/{collaborator.user_id}",
+        headers={"Authorization": f"Bearer {reader_token}"},
+    )
+    assert reader_manage_response.status_code == 403
+    assert reader_manage_response.json()["code"] == "PERMISSION_DENIED"
+
+    outsider_manage_response = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/collaborators/",
+        headers={"Authorization": f"Bearer {outsider_token}"},
+        json={"user_id": reader.user_id, "access_role": "reader"},
+    )
+    assert outsider_manage_response.status_code == 403
+    assert outsider_manage_response.json()["code"] == "PERMISSION_DENIED"
