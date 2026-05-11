@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from datetime import datetime, timezone
 
-from sqlalchemy import case, func, literal, or_, select
+from sqlalchemy import case, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.family_tree import FamilyTree
@@ -18,20 +18,8 @@ class FamilyTreeRepository:
 
     async def count_accessible_for_user(self, user_id: int) -> int:
         result = await self.session.execute(
-            select(func.count(FamilyTree.tree_id.distinct()))
+            select(func.count(FamilyTree.tree_id))
             .select_from(FamilyTree)
-            .outerjoin(
-                TreeCollaborator,
-                (TreeCollaborator.tree_id == FamilyTree.tree_id)
-                & (TreeCollaborator.user_id == user_id)
-                & (TreeCollaborator.status == "active"),
-            )
-            .where(
-                or_(
-                    FamilyTree.creator_user_id == user_id,
-                    TreeCollaborator.user_id.is_not(None),
-                )
-            )
         )
         return int(result.scalar_one())
 
@@ -44,7 +32,8 @@ class FamilyTreeRepository:
     ) -> list[dict[str, object | None]]:
         access_role = case(
             (FamilyTree.creator_user_id == user_id, literal("creator")),
-            else_=TreeCollaborator.access_role,
+            (TreeCollaborator.user_id.is_not(None), TreeCollaborator.access_role),
+            else_=literal("reader"),
         )
         result = await self.session.execute(
             select(
@@ -60,12 +49,6 @@ class FamilyTreeRepository:
                 (TreeCollaborator.tree_id == FamilyTree.tree_id)
                 & (TreeCollaborator.user_id == user_id)
                 & (TreeCollaborator.status == "active"),
-            )
-            .where(
-                or_(
-                    FamilyTree.creator_user_id == user_id,
-                    TreeCollaborator.user_id.is_not(None),
-                )
             )
             .order_by(FamilyTree.updated_at.desc(), FamilyTree.tree_id.desc())
             .offset(offset)

@@ -40,6 +40,8 @@ def _require_tree_role(*allowed_roles: str) -> Callable[..., TreePermissionConte
             role = "creator"
         else:
             role = await collaborator_repository.get_active_role(tree_id=tree_id, user_id=current_user.user_id)
+            if role is None and "reader" in allowed_roles:
+                role = "reader"
 
         if role is None:
             logger.warning(
