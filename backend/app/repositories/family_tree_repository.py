@@ -35,6 +35,11 @@ class FamilyTreeRepository:
             (TreeCollaborator.user_id.is_not(None), TreeCollaborator.access_role),
             else_=literal("reader"),
         )
+        access_priority = case(
+            (FamilyTree.creator_user_id == user_id, 0),
+            (TreeCollaborator.user_id.is_not(None), 1),
+            else_=2,
+        )
         result = await self.session.execute(
             select(
                 FamilyTree.tree_id,
@@ -50,7 +55,7 @@ class FamilyTreeRepository:
                 & (TreeCollaborator.user_id == user_id)
                 & (TreeCollaborator.status == "active"),
             )
-            .order_by(FamilyTree.updated_at.desc(), FamilyTree.tree_id.desc())
+            .order_by(access_priority.asc(), FamilyTree.updated_at.desc(), FamilyTree.tree_id.desc())
             .offset(offset)
             .limit(limit)
         )

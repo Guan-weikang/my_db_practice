@@ -1,7 +1,7 @@
 import asyncio
 import os
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2] / "backend"
@@ -92,6 +92,10 @@ async def get_or_create_tree(session, *, creator_user_id: int, tree_name: str, s
     session.add(tree)
     await session.flush()
     return tree
+
+
+async def touch_tree(tree: FamilyTree) -> None:
+    tree.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 async def ensure_collaborator(
@@ -259,7 +263,7 @@ async def main() -> None:
             surname="Chen",
             description="Used for stage4 member and relationship manual testing.",
         )
-        await get_or_create_tree(
+        empty_tree = await get_or_create_tree(
             session,
             creator_user_id=creator.user_id,
             tree_name="Stage3 Empty Tree",
@@ -290,6 +294,10 @@ async def main() -> None:
             access_role="reader",
             status="active",
         )
+
+        await touch_tree(managed_tree)
+        await touch_tree(empty_tree)
+        await touch_tree(public_tree)
 
         root = await ensure_member(
             session,

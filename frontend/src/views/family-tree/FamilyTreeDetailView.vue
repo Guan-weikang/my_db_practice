@@ -28,6 +28,12 @@
         <div class="detail-hero__actions">
           <span class="role-pill">{{ roleLabel(familyTreeStore.currentTree.access_role) }}</span>
           <router-link
+            class="button-link"
+            :to="{ name: 'member-list', params: { treeId } }"
+          >
+            成员列表
+          </router-link>
+          <router-link
             v-if="canManageCollaborators(familyTreeStore.currentTree.access_role)"
             class="button-link"
             :to="{ name: 'collaborators', params: { treeId } }"

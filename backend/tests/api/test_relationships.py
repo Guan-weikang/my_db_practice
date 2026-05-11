@@ -178,6 +178,8 @@ async def test_parent_child_conflicts_and_reader_permissions(client, db_session)
     father = await _create_member(db_session, tree_id=tree.tree_id, name="Father", gender="male", birth_date="1970-01-01")
     child = await _create_member(db_session, tree_id=tree.tree_id, name="Child", gender="male", birth_date="2000-01-01")
     younger_parent = await _create_member(db_session, tree_id=tree.tree_id, name="Younger", gender="female", birth_date="2010-01-01")
+    invalid_mother = await _create_member(db_session, tree_id=tree.tree_id, name="Invalid Mother", gender="male", birth_date="1965-01-01")
+    invalid_father = await _create_member(db_session, tree_id=tree.tree_id, name="Invalid Father", gender="female", birth_date="1965-01-01")
     cycle_root = await _create_member(db_session, tree_id=tree.tree_id, name="Cycle Root", gender="male")
     cycle_mid = await _create_member(db_session, tree_id=tree.tree_id, name="Cycle Mid", gender="female")
     cycle_leaf = await _create_member(db_session, tree_id=tree.tree_id, name="Cycle Leaf", gender="male")
@@ -213,6 +215,20 @@ async def test_parent_child_conflicts_and_reader_permissions(client, db_session)
         json={"parent_member_id": younger_parent.member_id, "child_member_id": child.member_id, "parent_role": "mother"},
     )
     assert invalid_birth_order.status_code == 400
+
+    invalid_mother_gender = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/relationships/parent-child",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"parent_member_id": invalid_mother.member_id, "child_member_id": child.member_id, "parent_role": "mother"},
+    )
+    assert invalid_mother_gender.status_code == 400
+
+    invalid_father_gender = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/relationships/parent-child",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"parent_member_id": invalid_father.member_id, "child_member_id": child.member_id, "parent_role": "father"},
+    )
+    assert invalid_father_gender.status_code == 400
 
     grandparent_relation = await client.post(
         f"/api/v1/family-trees/{tree.tree_id}/relationships/parent-child",
@@ -258,6 +274,9 @@ async def test_marriage_flow_conflicts_and_permissions(client, db_session):
     tree = await _create_tree(db_session, creator_user_id=creator.user_id, tree_name="Marriage Tree")
     member_a = await _create_member(db_session, tree_id=tree.tree_id, name="A", gender="male", birth_date="1985-01-01")
     member_b = await _create_member(db_session, tree_id=tree.tree_id, name="B", gender="female", birth_date="1986-01-01")
+    member_c = await _create_member(db_session, tree_id=tree.tree_id, name="C", gender="male", birth_date="1987-01-01")
+    member_d = await _create_member(db_session, tree_id=tree.tree_id, name="D", gender="unknown", birth_date="1988-01-01")
+    member_e = await _create_member(db_session, tree_id=tree.tree_id, name="E", gender="female", birth_date="1990-01-01")
 
     await _grant_role(
         db_session,
@@ -288,6 +307,13 @@ async def test_marriage_flow_conflicts_and_permissions(client, db_session):
     assert spouses_response.status_code == 200
     assert spouses_response.json()[0]["spouse_member_id"] == member_b.member_id
 
+    duplicate_active_spouse = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/relationships/marriages",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"member_id_1": member_a.member_id, "member_id_2": member_e.member_id},
+    )
+    assert duplicate_active_spouse.status_code == 409
+
     update_response = await client.patch(
         f"/api/v1/family-trees/{tree.tree_id}/relationships/marriages",
         headers={"Authorization": f"Bearer {creator_token}"},
@@ -315,6 +341,20 @@ async def test_marriage_flow_conflicts_and_permissions(client, db_session):
         json={"member_id_1": member_a.member_id, "member_id_2": member_a.member_id},
     )
     assert self_marriage.status_code == 409
+
+    same_gender_marriage = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/relationships/marriages",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"member_id_1": member_a.member_id, "member_id_2": member_c.member_id},
+    )
+    assert same_gender_marriage.status_code == 400
+
+    unknown_gender_marriage = await client.post(
+        f"/api/v1/family-trees/{tree.tree_id}/relationships/marriages",
+        headers={"Authorization": f"Bearer {creator_token}"},
+        json={"member_id_1": member_a.member_id, "member_id_2": member_d.member_id},
+    )
+    assert unknown_gender_marriage.status_code == 400
 
     invalid_dates = await client.patch(
         f"/api/v1/family-trees/{tree.tree_id}/relationships/marriages",

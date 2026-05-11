@@ -28,6 +28,7 @@ class RelationshipService:
         parent = await self._get_member_or_raise(tree_id=tree_id, member_id=payload.parent_member_id)
         child = await self._get_member_or_raise(tree_id=tree_id, member_id=payload.child_member_id)
         self._validate_parent_child_members(parent_member_id=parent.member_id, child_member_id=child.member_id)
+        self._validate_parent_role_gender(parent_role=payload.parent_role, parent_gender=parent.gender)
         self._validate_parent_birth_order(parent_birth_date=parent.birth_date, child_birth_date=child.birth_date)
 
         existing_same_role = await self.relationship_repository.get_parent_by_child_and_role(
@@ -90,8 +91,9 @@ class RelationshipService:
 
     async def create_marriage(self, *, tree_id: int, payload: MarriageCreateRequest) -> MarriageResponse:
         member_id_1, member_id_2 = self._normalize_marriage_members(payload.member_id_1, payload.member_id_2)
-        await self._get_member_or_raise(tree_id=tree_id, member_id=member_id_1)
-        await self._get_member_or_raise(tree_id=tree_id, member_id=member_id_2)
+        member_1 = await self._get_member_or_raise(tree_id=tree_id, member_id=member_id_1)
+        member_2 = await self._get_member_or_raise(tree_id=tree_id, member_id=member_id_2)
+        self._validate_marriage_gender(member_1_gender=member_1.gender, member_2_gender=member_2.gender)
         self._validate_marriage_dates(married_at=payload.married_at, ended_at=payload.ended_at, status=payload.status)
 
         existing = await self.relationship_repository.get_marriage(
@@ -101,6 +103,8 @@ class RelationshipService:
         )
         if existing is not None:
             raise conflict("Marriage relation already exists")
+        if payload.status == "active":
+            await self._ensure_no_other_active_marriage(tree_id=tree_id, member_id_1=member_id_1, member_id_2=member_id_2)
 
         try:
             marriage = await self.relationship_repository.create_marriage(
@@ -128,10 +132,21 @@ class RelationshipService:
         if marriage is None:
             raise not_found("Marriage relation not found")
 
+        member_1 = await self._get_member_or_raise(tree_id=tree_id, member_id=member_id_1)
+        member_2 = await self._get_member_or_raise(tree_id=tree_id, member_id=member_id_2)
+        self._validate_marriage_gender(member_1_gender=member_1.gender, member_2_gender=member_2.gender)
+
         married_at = payload.married_at if "married_at" in payload.model_fields_set else marriage.married_at
         ended_at = payload.ended_at if "ended_at" in payload.model_fields_set else marriage.ended_at
         status = payload.status if payload.status is not None else marriage.status
         self._validate_marriage_dates(married_at=married_at, ended_at=ended_at, status=status)
+        if status == "active":
+            await self._ensure_no_other_active_marriage(
+                tree_id=tree_id,
+                member_id_1=member_id_1,
+                member_id_2=member_id_2,
+                exclude_pair=(member_id_1, member_id_2),
+            )
 
         try:
             marriage = await self.relationship_repository.update_marriage(
@@ -181,10 +196,49 @@ class RelationshipService:
             raise bad_request("Parent birth_date must be earlier than child birth_date")
 
     @staticmethod
+    def _validate_parent_role_gender(*, parent_role: str, parent_gender: str) -> None:
+        if parent_role == "father" and parent_gender != "male":
+            raise bad_request("Father relation requires parent gender to be male")
+        if parent_role == "mother" and parent_gender != "female":
+            raise bad_request("Mother relation requires parent gender to be female")
+
+    @staticmethod
     def _normalize_marriage_members(member_id_1: int, member_id_2: int) -> tuple[int, int]:
         if member_id_1 == member_id_2:
             raise conflict("Marriage members cannot be identical")
         return (member_id_1, member_id_2) if member_id_1 < member_id_2 else (member_id_2, member_id_1)
+
+    @staticmethod
+    def _validate_marriage_gender(*, member_1_gender: str, member_2_gender: str) -> None:
+        valid_genders = {member_1_gender, member_2_gender}
+        if "unknown" in valid_genders:
+            raise bad_request("Marriage relation requires both members to have known gender")
+        if member_1_gender == member_2_gender:
+            raise bad_request("Marriage relation requires one male member and one female member")
+
+    async def _ensure_no_other_active_marriage(
+        self,
+        *,
+        tree_id: int,
+        member_id_1: int,
+        member_id_2: int,
+        exclude_pair: tuple[int, int] | None = None,
+    ) -> None:
+        active_marriage_for_member_1 = await self.relationship_repository.find_active_marriage_for_member(
+            tree_id=tree_id,
+            member_id=member_id_1,
+            exclude_pair=exclude_pair,
+        )
+        if active_marriage_for_member_1 is not None:
+            raise conflict("Member already has another active marriage")
+
+        active_marriage_for_member_2 = await self.relationship_repository.find_active_marriage_for_member(
+            tree_id=tree_id,
+            member_id=member_id_2,
+            exclude_pair=exclude_pair,
+        )
+        if active_marriage_for_member_2 is not None:
+            raise conflict("Member already has another active marriage")
 
     @staticmethod
     def _validate_marriage_dates(*, married_at, ended_at, status: str) -> None:

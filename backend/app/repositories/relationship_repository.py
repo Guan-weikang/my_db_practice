@@ -132,6 +132,28 @@ class RelationshipRepository:
         )
         return result.scalar_one_or_none()
 
+    async def find_active_marriage_for_member(
+        self,
+        *,
+        tree_id: int,
+        member_id: int,
+        exclude_pair: tuple[int, int] | None = None,
+    ) -> Marriage | None:
+        conditions = [
+            Marriage.tree_id == tree_id,
+            Marriage.status == "active",
+            or_(Marriage.member_id_1 == member_id, Marriage.member_id_2 == member_id),
+        ]
+        if exclude_pair is not None:
+            conditions.append(
+                ~(
+                    (Marriage.member_id_1 == exclude_pair[0])
+                    & (Marriage.member_id_2 == exclude_pair[1])
+                )
+            )
+        result = await self.session.execute(select(Marriage).where(*conditions).limit(1))
+        return result.scalar_one_or_none()
+
     async def create_marriage(
         self,
         *,
