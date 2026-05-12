@@ -1,14 +1,40 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps.db import get_db_session
+from app.api.deps.permission import TreePermissionContext, require_tree_reader
+from app.schemas.search import PaginatedSearchMemberResponse
+from app.services.search_service import SearchService
 
 router = APIRouter()
 
 
-@router.get("/members")
-async def search_members(tree_id: int, keyword: str = Query(...)) -> dict:
-    return {"tree_id": tree_id, "keyword": keyword, "items": []}
+def _search_service(session: AsyncSession) -> SearchService:
+    return SearchService(session)
+
+
+@router.get("/members", response_model=PaginatedSearchMemberResponse)
+async def search_members(
+    tree_id: int,
+    keyword: str = Query(...),
+    page: int = Query(1),
+    page_size: int = Query(20),
+    _: TreePermissionContext = Depends(require_tree_reader),
+    session: AsyncSession = Depends(get_db_session),
+) -> PaginatedSearchMemberResponse:
+    return await _search_service(session).search_members(
+        tree_id=tree_id,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/branch-tree")
-async def branch_tree(tree_id: int, root_member_id: int) -> dict:
-    return {"tree_id": tree_id, "root_member_id": root_member_id, "items": []}
-
+async def branch_tree(
+    tree_id: int,
+    root_member_id: int,
+    max_depth: int = Query(4),
+    _: TreePermissionContext = Depends(require_tree_reader),
+) -> dict:
+    return {"tree_id": tree_id, "root_member_id": root_member_id, "max_depth": max_depth, "nodes": []}
