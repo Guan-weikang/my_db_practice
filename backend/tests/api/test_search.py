@@ -256,3 +256,110 @@ async def test_search_members_supports_pagination_and_requires_login(client, db_
         params={"keyword": "Search"},
     )
     assert unauthenticated_response.status_code == 401
+
+
+async def test_branch_tree_returns_root_and_descendant_nodes_in_path_order(client, db_session):
+    creator_username = _unique("branch_tree_creator")
+    creator = await _create_user(db_session, username=creator_username, email=f"{creator_username}@example.com")
+    tree = await _create_tree(db_session, creator_user_id=creator.user_id, tree_name="Branch Tree Test")
+
+    root = await _create_member(db_session, tree_id=tree.tree_id, name="Root", gender="male", generation_no=1)
+    son = await _create_member(db_session, tree_id=tree.tree_id, name="Son", gender="male", generation_no=2)
+    daughter = await _create_member(db_session, tree_id=tree.tree_id, name="Daughter", gender="female", generation_no=2)
+    grandson = await _create_member(db_session, tree_id=tree.tree_id, name="Grandson", gender="male", generation_no=3)
+
+    await _create_parent_child(
+        db_session,
+        tree_id=tree.tree_id,
+        parent_member_id=root.member_id,
+        child_member_id=son.member_id,
+        parent_role="father",
+    )
+    await _create_parent_child(
+        db_session,
+        tree_id=tree.tree_id,
+        parent_member_id=root.member_id,
+        child_member_id=daughter.member_id,
+        parent_role="father",
+    )
+    await _create_parent_child(
+        db_session,
+        tree_id=tree.tree_id,
+        parent_member_id=son.member_id,
+        child_member_id=grandson.member_id,
+        parent_role="father",
+    )
+
+    token = await _login(client, username=creator_username)
+    response = await client.get(
+        f"/api/v1/family-trees/{tree.tree_id}/search/branch-tree",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"root_member_id": root.member_id, "max_depth": 4},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["root_member"]["member_id"] == root.member_id
+    assert payload["max_depth"] == 4
+    assert [node["member_id"] for node in payload["nodes"]] == [
+        root.member_id,
+        son.member_id,
+        grandson.member_id,
+        daughter.member_id,
+    ]
+    assert payload["nodes"][0]["depth"] == 0
+    assert payload["nodes"][0]["parent_member_id"] is None
+    assert payload["nodes"][1]["depth"] == 1
+    assert payload["nodes"][1]["incoming_parent_role"] == "father"
+    assert payload["nodes"][2]["path_member_ids"] == [root.member_id, son.member_id, grandson.member_id]
+
+
+async def test_branch_tree_honors_max_depth_and_reader_access(client, db_session):
+    creator_username = _unique("branch_depth_creator")
+    reader_username = _unique("branch_depth_reader")
+    creator = await _create_user(db_session, username=creator_username, email=f"{creator_username}@example.com")
+    reader = await _create_user(db_session, username=reader_username, email=f"{reader_username}@example.com")
+    tree = await _create_tree(db_session, creator_user_id=creator.user_id, tree_name="Branch Depth Tree")
+
+    root = await _create_member(db_session, tree_id=tree.tree_id, name="Root", gender="female", generation_no=1)
+    child = await _create_member(db_session, tree_id=tree.tree_id, name="Child", gender="male", generation_no=2)
+    grandchild = await _create_member(db_session, tree_id=tree.tree_id, name="Grandchild", gender="female", generation_no=3)
+
+    await _grant_role(
+        db_session,
+        tree_id=tree.tree_id,
+        user_id=reader.user_id,
+        invited_by=creator.user_id,
+        access_role="reader",
+    )
+    await _create_parent_child(
+        db_session,
+        tree_id=tree.tree_id,
+        parent_member_id=root.member_id,
+        child_member_id=child.member_id,
+        parent_role="mother",
+    )
+    await _create_parent_child(
+        db_session,
+        tree_id=tree.tree_id,
+        parent_member_id=child.member_id,
+        child_member_id=grandchild.member_id,
+        parent_role="father",
+    )
+
+    reader_token = await _login(client, username=reader_username)
+    response = await client.get(
+        f"/api/v1/family-trees/{tree.tree_id}/search/branch-tree",
+        headers={"Authorization": f"Bearer {reader_token}"},
+        params={"root_member_id": root.member_id, "max_depth": 1},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert [node["member_id"] for node in payload["nodes"]] == [root.member_id, child.member_id]
+
+    invalid_depth_response = await client.get(
+        f"/api/v1/family-trees/{tree.tree_id}/search/branch-tree",
+        headers={"Authorization": f"Bearer {reader_token}"},
+        params={"root_member_id": root.member_id, "max_depth": 0},
+    )
+    assert invalid_depth_response.status_code == 422
