@@ -1,0 +1,97 @@
+{
+  "tree_code": "tang_li",
+  "display_name": "唐朝李氏",
+  "surname": "李",
+  "historical_basis": "唐朝皇室公开历史人物种子谱系",
+  "source_policy": "curated_public_reference",
+  "members": [
+    {
+      "member_code": "li_yuan",
+      "name": "李渊",
+      "gender": "male",
+      "birth_year": 566,
+      "death_year": 635,
+      "generation_no": 1,
+      "generation_name": "",
+      "historical_real": true,
+      "confidence": "high",
+      "source_system": "public_reference",
+      "source_url": "https://en.wikipedia.org/wiki/Emperor_Gaozu_of_Tang"
+    },
+    {
+      "member_code": "li_shimin",
+      "name": "李世民",
+      "gender": "male",
+      "birth_year": 598,
+      "death_year": 649,
+      "generation_no": 2,
+      "generation_name": "",
+      "historical_real": true,
+      "confidence": "high",
+      "source_system": "public_reference",
+      "source_url": "https://en.wikipedia.org/wiki/Emperor_Taizong_of_Tang"
+    },
+    {
+      "member_code": "li_zhi",
+      "name": "李治",
+      "gender": "male",
+      "birth_year": 628,
+      "death_year": 683,
+      "generation_no": 3,
+      "generation_name": "",
+      "historical_real": true,
+      "confidence": "high",
+      "source_system": "public_reference",
+      "source_url": "https://en.wikipedia.org/wiki/Emperor_Gaozong_of_Tang"
+    },
+    {
+      "member_code": "li_dan",
+      "name": "李旦",
+      "gender": "male",
+      "birth_year": 662,
+      "death_year": 716,
+      "generation_no": 4,
+      "generation_name": "",
+      "historical_real": true,
+      "confidence": "high",
+      "source_system": "public_reference",
+      "source_url": "https://en.wikipedia.org/wiki/Emperor_Ruizong_of_Tang"
+    },
+    {
+      "member_code": "li_longji",
+      "name": "李隆基",
+      "gender": "male",
+      "birth_year": 685,
+      "death_year": 762,
+      "generation_no": 5,
+      "generation_name": "",
+      "historical_real": true,
+      "confidence": "high",
+      "source_system": "public_reference",
+      "source_url": "https://en.wikipedia.org/wiki/Emperor_Xuanzong_of_Tang"
+    }
+  ],
+  "parent_child": [
+    {
+      "parent_member_code": "li_yuan",
+      "child_member_code": "li_shimin",
+      "parent_role": "father"
+    },
+    {
+      "parent_member_code": "li_shimin",
+      "child_member_code": "li_zhi",
+      "parent_role": "father"
+    },
+    {
+      "parent_member_code": "li_zhi",
+      "child_member_code": "li_dan",
+      "parent_role": "father"
+    },
+    {
+      "parent_member_code": "li_dan",
+      "child_member_code": "li_longji",
+      "parent_role": "father"
+    }
+  ],
+  "marriages": []
+}

@@ -1,0 +1,3 @@
+user_id,username,password_hash,display_name,email,status
+7000001,stage7_importer,stage7-import-only,Stage7 Importer,stage7_importer@example.com,active
+7000002,stage7_reader,stage7-read-only,Stage7 Reader,stage7_reader@example.com,active

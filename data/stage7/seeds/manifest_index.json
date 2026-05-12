@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "tree_count": 5,
+  "trees": [
+    {
+      "tree_code": "han_liu",
+      "display_name": "汉朝刘氏",
+      "surname": "刘",
+      "seed_member_count": 5,
+      "parent_child_count": 4,
+      "marriage_count": 0,
+      "historical_basis": "汉朝皇室公开历史人物种子谱系"
+    },
+    {
+      "tree_code": "kong_clan",
+      "display_name": "孔氏",
+      "surname": "孔",
+      "seed_member_count": 3,
+      "parent_child_count": 2,
+      "marriage_count": 0,
+      "historical_basis": "孔氏公开历史人物种子谱系"
+    },
+    {
+      "tree_code": "ming_zhu",
+      "display_name": "明朝朱氏",
+      "surname": "朱",
+      "seed_member_count": 5,
+      "parent_child_count": 4,
+      "marriage_count": 0,
+      "historical_basis": "明朝皇室公开历史人物种子谱系"
+    },
+    {
+      "tree_code": "tang_li",
+      "display_name": "唐朝李氏",
+      "surname": "李",
+      "seed_member_count": 5,
+      "parent_child_count": 4,
+      "marriage_count": 0,
+      "historical_basis": "唐朝皇室公开历史人物种子谱系"
+    },
+    {
+      "tree_code": "wuyue_qian",
+      "display_name": "吴越钱氏",
+      "surname": "钱",
+      "seed_member_count": 3,
+      "parent_child_count": 2,
+      "marriage_count": 0,
+      "historical_basis": "吴越钱氏公开历史人物种子谱系"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+tree_id,tree_name,surname,compiled_at,creator_user_id,description
+7001,汉朝刘氏,刘,2026-05-13,7000001,Historical Han Liu seed tree with synthetic expansion.
+7002,唐朝李氏,李,2026-05-13,7000001,Historical Tang Li seed tree with synthetic expansion.
+7003,明朝朱氏,朱,2026-05-13,7000001,Historical Ming Zhu seed tree with synthetic expansion.
+7004,吴越钱氏,钱,2026-05-13,7000001,Historical Wuyue Qian seed tree with synthetic expansion.
+7005,孔氏,孔,2026-05-13,7000001,Historical Kong seed tree with synthetic expansion.
+7006,合成陈氏,陈,2026-05-13,7000001,Fully synthetic tree for Stage 7 scale padding.
+7007,合成王氏,王,2026-05-13,7000001,Fully synthetic tree for Stage 7 scale padding.
+7008,合成张氏,张,2026-05-13,7000001,Fully synthetic tree for Stage 7 scale padding.
+7009,合成林氏,林,2026-05-13,7000001,Fully synthetic tree for Stage 7 scale padding.
+7010,合成赵氏,赵,2026-05-13,7000001,Fully synthetic tree for Stage 7 scale padding.
