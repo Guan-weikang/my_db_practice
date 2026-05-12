@@ -229,6 +229,16 @@ a {
   background: #fcfcfd;
 }
 
+.record-card--action {
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.record-card--action:hover {
+  border-color: #5eead4;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.08);
+  transform: translateY(-2px);
+}
+
 .record-card h2,
 .detail-hero h2 {
   margin: 0;
@@ -323,6 +333,40 @@ a {
   border: 1px dashed #cbd5e1;
   border-radius: 12px;
   background: #f8fafc;
+}
+
+.query-action-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.tree-node {
+  margin-left: calc(var(--depth, 0) * 24px);
+}
+
+.tree-node__card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-left: 3px solid #14b8a6;
+  border-radius: 10px;
+  background: #f8fffe;
+  box-shadow: inset 0 0 0 1px #d1fae5;
+}
+
+.path-node {
+  display: grid;
+  gap: 10px;
+}
+
+.path-edge {
+  margin-left: 16px;
+  padding-left: 16px;
+  border-left: 2px dashed #99f6e4;
+  color: #0f766e;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 @media (max-width: 720px) {

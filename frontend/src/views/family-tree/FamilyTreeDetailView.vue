@@ -43,6 +43,25 @@
         </div>
       </div>
 
+      <div class="query-action-grid">
+        <router-link class="record-card record-card--action" :to="{ name: 'member-search', params: { treeId } }">
+          <strong>成员搜索</strong>
+          <p class="muted">按姓名模糊搜索并区分重名成员。</p>
+        </router-link>
+        <router-link class="record-card record-card--action" :to="{ name: 'branch-tree', params: { treeId } }">
+          <strong>分支树预览</strong>
+          <p class="muted">输入根成员 ID，查看向下展开的后代分支。</p>
+        </router-link>
+        <router-link class="record-card record-card--action" :to="{ name: 'ancestor-query', params: { treeId } }">
+          <strong>祖先查询</strong>
+          <p class="muted">输入成员 ID，查看祖先链和分叉节点。</p>
+        </router-link>
+        <router-link class="record-card record-card--action" :to="{ name: 'kinship-query', params: { treeId } }">
+          <strong>亲缘路径</strong>
+          <p class="muted">输入两名成员 ID，查看最短关系链路。</p>
+        </router-link>
+      </div>
+
       <div class="detail-grid">
         <div class="detail-item">
           <span class="muted">姓氏</span>

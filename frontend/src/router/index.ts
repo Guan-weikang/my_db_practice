@@ -12,7 +12,9 @@ import FamilyTreeListView from "../views/family-tree/FamilyTreeListView.vue";
 import MemberDetailView from "../views/member/MemberDetailView.vue";
 import MemberListView from "../views/member/MemberListView.vue";
 import AncestorQueryView from "../views/query/AncestorQueryView.vue";
+import BranchTreeView from "../views/query/BranchTreeView.vue";
 import KinshipQueryView from "../views/query/KinshipQueryView.vue";
+import MemberSearchView from "../views/query/MemberSearchView.vue";
 import CollaboratorManageView from "../views/collaboration/CollaboratorManageView.vue";
 
 const routes: RouteRecordRaw[] = [
@@ -36,6 +38,8 @@ const routes: RouteRecordRaw[] = [
       { path: "family-trees/:treeId/collaborators", name: "collaborators", component: CollaboratorManageView },
       { path: "family-trees/:treeId/members", name: "member-list", component: MemberListView },
       { path: "family-trees/:treeId/members/:memberId", name: "member-detail", component: MemberDetailView },
+      { path: "family-trees/:treeId/query/search", name: "member-search", component: MemberSearchView },
+      { path: "family-trees/:treeId/query/branch-tree", name: "branch-tree", component: BranchTreeView },
       { path: "family-trees/:treeId/query/ancestors", name: "ancestor-query", component: AncestorQueryView },
       { path: "family-trees/:treeId/query/kinship", name: "kinship-query", component: KinshipQueryView }
     ]

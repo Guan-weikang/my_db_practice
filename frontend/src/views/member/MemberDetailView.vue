@@ -33,6 +33,30 @@
         </div>
       </div>
 
+      <div class="query-action-grid">
+        <router-link
+          class="record-card record-card--action"
+          :to="{ name: 'ancestor-query', params: { treeId }, query: { memberId } }"
+        >
+          <strong>查看祖先链</strong>
+          <p class="muted">以当前成员为起点，向上追溯所有祖先。</p>
+        </router-link>
+        <router-link
+          class="record-card record-card--action"
+          :to="{ name: 'branch-tree', params: { treeId }, query: { rootMemberId: memberId } }"
+        >
+          <strong>查看后代分支</strong>
+          <p class="muted">以当前成员为根，向下展开子女与后代节点。</p>
+        </router-link>
+        <router-link
+          class="record-card record-card--action"
+          :to="{ name: 'kinship-query', params: { treeId }, query: { memberA: memberId } }"
+        >
+          <strong>作为路径起点</strong>
+          <p class="muted">预填成员 A，继续查询与其他成员的最短亲缘路径。</p>
+        </router-link>
+      </div>
+
       <div class="detail-grid">
         <div class="detail-item">
           <span class="muted">出生日期</span>
