@@ -55,6 +55,17 @@ def main() -> None:
         raise SystemExit("DATABASE_URL is required via --database-url or environment variable.")
 
     with psycopg.connect(args.database_url) as connection:
+        replication_role_enabled = False
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SET session_replication_role = replica")
+            connection.commit()
+            replication_role_enabled = True
+            print("Enabled session_replication_role=replica for faster bulk import.")
+        except Exception:
+            connection.rollback()
+            print("Could not enable session_replication_role=replica; continuing with normal constraints.")
+
         for table_name in IMPORT_ORDER:
             csv_path = args.input_dir / f"{table_name}.csv"
             if not csv_path.exists():
@@ -62,6 +73,12 @@ def main() -> None:
             _copy_table(connection, csv_path, table_name)
             connection.commit()
             print(f"Imported {table_name} from {csv_path}")
+
+        if replication_role_enabled:
+            with connection.cursor() as cursor:
+                cursor.execute("SET session_replication_role = origin")
+            connection.commit()
+            print("Restored session_replication_role=origin.")
 
 
 if __name__ == "__main__":

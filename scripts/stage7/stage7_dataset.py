@@ -18,11 +18,12 @@ DEFAULT_READER_USER_ID = 7000002
 DEFAULT_TREE_ID_START = 7001
 DEFAULT_MEMBER_ID_START = 1000001
 DEFAULT_RANDOM_SEED = 20260513
+CURRENT_YEAR = 2026
 
 MALE_GIVEN_PARTS = ["伟", "强", "明", "国", "文", "成", "德", "世", "承", "宗", "景", "安"]
 FEMALE_GIVEN_PARTS = ["丽", "芳", "敏", "兰", "梅", "华", "玉", "宁", "安", "慧", "清", "雅"]
 DUPLICATE_NAME_POOL = ["伟", "敏", "明", "丽", "强", "华"]
-GENERATION_TOKENS = list("德仁孝礼义信忠和景承安宁文武昌隆")
+GENERATION_TOKENS = list("德仁孝礼义信忠和景承安宁文武昌隆绍启盛延")
 
 
 @dataclass(frozen=True)
@@ -33,86 +34,53 @@ class TreeSpec:
     target_members: int
     target_generations: int
     description: str
+    latest_generation_birth_year: int
+    generation_gap: int
+    duplicate_rate: float = 0.12
 
 
 DEFAULT_TREE_SPECS: tuple[TreeSpec, ...] = (
-    TreeSpec("han_liu", "汉朝刘氏", "刘", 8000, 32, "Historical Han Liu seed tree with synthetic expansion."),
-    TreeSpec("tang_li", "唐朝李氏", "李", 10000, 32, "Historical Tang Li seed tree with synthetic expansion."),
-    TreeSpec("ming_zhu", "明朝朱氏", "朱", 12000, 33, "Historical Ming Zhu seed tree with synthetic expansion."),
-    TreeSpec("wuyue_qian", "吴越钱氏", "钱", 5000, 30, "Historical Wuyue Qian seed tree with synthetic expansion."),
-    TreeSpec("kong_clan", "孔氏", "孔", 50000, 40, "Historical Kong seed tree with synthetic expansion."),
-    TreeSpec("chen_synthetic", "合成陈氏", "陈", 4000, 30, "Fully synthetic tree for Stage 7 scale padding."),
-    TreeSpec("wang_synthetic", "合成王氏", "王", 3500, 30, "Fully synthetic tree for Stage 7 scale padding."),
-    TreeSpec("zhang_synthetic", "合成张氏", "张", 3000, 30, "Fully synthetic tree for Stage 7 scale padding."),
-    TreeSpec("lin_synthetic", "合成林氏", "林", 2500, 30, "Fully synthetic tree for Stage 7 scale padding."),
-    TreeSpec("zhao_synthetic", "合成赵氏", "赵", 2000, 30, "Fully synthetic tree for Stage 7 scale padding."),
+    TreeSpec("han_liu", "汉朝刘氏", "刘", 8000, 32, "Fully synthetic Han-Liu themed tree.", 2008, 22),
+    TreeSpec("tang_li", "唐朝李氏", "李", 10000, 32, "Fully synthetic Tang-Li themed tree.", 2006, 22),
+    TreeSpec("ming_zhu", "明朝朱氏", "朱", 12000, 33, "Fully synthetic Ming-Zhu themed tree.", 2005, 22),
+    TreeSpec("wuyue_qian", "吴越钱氏", "钱", 5000, 30, "Fully synthetic Wuyue-Qian themed tree.", 2007, 21),
+    TreeSpec("kong_clan", "孔氏", "孔", 55000, 40, "Fully synthetic Kong-themed large benchmark tree.", 2003, 22),
+    TreeSpec("chen_synthetic", "合成陈氏", "陈", 4000, 30, "Fully synthetic Chen tree.", 2010, 21),
+    TreeSpec("wang_synthetic", "合成王氏", "王", 3500, 30, "Fully synthetic Wang tree.", 2011, 21),
+    TreeSpec("zhang_synthetic", "合成张氏", "张", 3000, 30, "Fully synthetic Zhang tree.", 2010, 21),
+    TreeSpec("lin_synthetic", "合成林氏", "林", 2500, 30, "Fully synthetic Lin tree.", 2012, 21),
+    TreeSpec("zhao_synthetic", "合成赵氏", "赵", 2000, 30, "Fully synthetic Zhao tree.", 2011, 21),
 )
 
 
-def load_seed_manifests(seeds_dir: Path = SEEDS_DIR) -> list[dict[str, Any]]:
-    manifests: list[dict[str, Any]] = []
-    for path in sorted(seeds_dir.glob("*.json")):
-        if path.name == "manifest_index.json":
-            continue
-        manifests.append(json.loads(path.read_text(encoding="utf-8")))
-    return manifests
+def load_tree_specs() -> tuple[TreeSpec, ...]:
+    return DEFAULT_TREE_SPECS
 
 
-def validate_seed_manifests(manifests: list[dict[str, Any]]) -> None:
-    seen_tree_codes: set[str] = set()
-    for manifest in manifests:
-        tree_code = manifest["tree_code"]
-        if tree_code in seen_tree_codes:
-            raise ValueError(f"Duplicate tree_code in manifests: {tree_code}")
-        seen_tree_codes.add(tree_code)
-
-        member_ids = {member["member_code"] for member in manifest["members"]}
-        if len(member_ids) != len(manifest["members"]):
-            raise ValueError(f"Duplicate member_code in manifest: {tree_code}")
-
-        for relation in manifest.get("parent_child", []):
-            if relation["parent_member_code"] not in member_ids:
-                raise ValueError(f"Unknown parent_member_code in {tree_code}: {relation['parent_member_code']}")
-            if relation["child_member_code"] not in member_ids:
-                raise ValueError(f"Unknown child_member_code in {tree_code}: {relation['child_member_code']}")
-            if relation["parent_role"] not in {"father", "mother"}:
-                raise ValueError(f"Invalid parent_role in {tree_code}: {relation['parent_role']}")
-
-        for marriage in manifest.get("marriages", []):
-            if marriage["member_code_1"] not in member_ids or marriage["member_code_2"] not in member_ids:
-                raise ValueError(f"Unknown member_code in marriage of {tree_code}")
-
-
-def build_manifest_index(manifests: list[dict[str, Any]]) -> dict[str, Any]:
-    validate_seed_manifests(manifests)
+def build_manifest_index(specs: tuple[TreeSpec, ...] = DEFAULT_TREE_SPECS) -> dict[str, Any]:
     return {
-        "schema_version": 1,
-        "tree_count": len(manifests),
+        "schema_version": 2,
+        "mode": "fully_synthetic",
+        "tree_count": len(specs),
         "trees": [
             {
-                "tree_code": manifest["tree_code"],
-                "display_name": manifest["display_name"],
-                "surname": manifest["surname"],
-                "seed_member_count": len(manifest["members"]),
-                "parent_child_count": len(manifest.get("parent_child", [])),
-                "marriage_count": len(manifest.get("marriages", [])),
-                "historical_basis": manifest["historical_basis"],
+                "tree_code": spec.tree_code,
+                "display_name": spec.display_name,
+                "surname": spec.surname,
+                "target_members": spec.target_members,
+                "target_generations": spec.target_generations,
+                "latest_generation_birth_year": spec.latest_generation_birth_year,
+                "generation_gap": spec.generation_gap,
+                "duplicate_rate": spec.duplicate_rate,
             }
-            for manifest in manifests
+            for spec in specs
         ],
     }
 
 
-def write_manifest_index(output_path: Path, manifests: list[dict[str, Any]]) -> None:
+def write_manifest_index(output_path: Path, specs: tuple[TreeSpec, ...] = DEFAULT_TREE_SPECS) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(build_manifest_index(manifests), ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-
-
-def _tree_spec_map(specs: tuple[TreeSpec, ...]) -> dict[str, TreeSpec]:
-    return {spec.tree_code: spec for spec in specs}
+    output_path.write_text(json.dumps(build_manifest_index(specs), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _normalize_marriage_members(member_id_1: int, member_id_2: int) -> tuple[int, int]:
@@ -121,16 +89,9 @@ def _normalize_marriage_members(member_id_1: int, member_id_2: int) -> tuple[int
     return member_id_2, member_id_1
 
 
-def _format_birth_date(year: int | None) -> str:
-    if year is None or year <= 0 or year > 9999:
-        return ""
-    return f"{year:04d}-01-01"
-
-
-def _format_death_date(year: int | None) -> str:
-    if year is None or year <= 0 or year > 9999:
-        return ""
-    return f"{year:04d}-12-31"
+def _format_date(year: int, month: int = 1, day: int = 1) -> str:
+    year = min(max(year, 1), 9999)
+    return f"{year:04d}-{month:02d}-{day:02d}"
 
 
 def _generation_token(generation_no: int) -> str:
@@ -141,21 +102,24 @@ def _generated_name(rng: random.Random, surname: str, gender: str, generation_no
     if rng.random() < duplicate_rate:
         return surname + rng.choice(DUPLICATE_NAME_POOL)
     given_parts = MALE_GIVEN_PARTS if gender == "male" else FEMALE_GIVEN_PARTS
-    if rng.random() < 0.6:
+    if rng.random() < 0.65:
         return surname + _generation_token(generation_no) + rng.choice(given_parts)
     return surname + rng.choice(given_parts) + rng.choice(given_parts)
 
 
 def _default_generation_targets(total_members: int, generations: int) -> list[int]:
-    weights = [max(1, min(index + 1, generations - index)) for index in range(generations)]
-    total_weight = sum(weights)
+    if generations < 1:
+        raise ValueError("generations must be positive")
+    weights = [max(1, min(index + 1, generations - index)) for index in range(1, generations)]
+    total_weight = sum(weights) if weights else 1
     counts = [1] * generations
-    remaining = total_members - generations
-    for index, weight in enumerate(weights):
+    counts[0] = 2
+    remaining = total_members - (generations + 1)
+    for offset, weight in enumerate(weights, start=1):
         if remaining <= 0:
             break
         share = (remaining * weight) // total_weight
-        counts[index] += share
+        counts[offset] += share
     assigned = sum(counts)
     pointer = generations - 1
     while assigned < total_members:
@@ -168,6 +132,38 @@ def _default_generation_targets(total_members: int, generations: int) -> list[in
             assigned -= 1
         pointer = (pointer - 1) % generations
     return counts
+
+
+def _generation_birth_year(spec: TreeSpec, generation_no: int, rng: random.Random) -> int:
+    year = spec.latest_generation_birth_year - (spec.target_generations - generation_no) * spec.generation_gap
+    return year + rng.randint(-3, 3)
+
+
+def _life_profile(birth_year: int, rng: random.Random, current_year: int = CURRENT_YEAR) -> tuple[bool, str]:
+    current_age = current_year - birth_year
+    if current_age >= 96:
+        alive = False
+    elif current_age >= 91:
+        alive = rng.random() < 0.02
+    elif current_age >= 81:
+        alive = rng.random() < 0.12
+    elif current_age >= 71:
+        alive = rng.random() < 0.35
+    elif current_age >= 61:
+        alive = rng.random() < 0.72
+    else:
+        alive = rng.random() < 0.96
+
+    if alive:
+        return True, ""
+
+    max_age = min(max(current_age - 1, 18), 109)
+    mode_age = 68 if birth_year < 1800 else 74 if birth_year < 1950 else 79
+    mode_age = min(mode_age, max_age)
+    death_age = int(round(rng.triangular(18, max_age, mode_age)))
+    death_age = max(18, min(max_age, death_age))
+    death_year = min(current_year - 1, birth_year + death_age)
+    return False, _format_date(death_year, 12, 31)
 
 
 def _make_user_rows() -> list[dict[str, Any]]:
@@ -192,18 +188,14 @@ def _make_user_rows() -> list[dict[str, Any]]:
 
 
 def generate_dataset(
-    manifests: list[dict[str, Any]],
     *,
     specs: tuple[TreeSpec, ...] = DEFAULT_TREE_SPECS,
     random_seed: int = DEFAULT_RANDOM_SEED,
     tree_id_start: int = DEFAULT_TREE_ID_START,
     member_id_start: int = DEFAULT_MEMBER_ID_START,
+    current_year: int = CURRENT_YEAR,
 ) -> dict[str, list[dict[str, Any]]]:
-    validate_seed_manifests(manifests)
-    manifest_map = {manifest["tree_code"]: manifest for manifest in manifests}
-    spec_map = _tree_spec_map(specs)
     rng = random.Random(random_seed)
-
     dataset = {
         "user_account": _make_user_rows(),
         "family_tree": [],
@@ -240,96 +232,28 @@ def generate_dataset(
             }
         )
 
-        members_by_generation: dict[int, list[dict[str, Any]]] = {}
-        marriage_pairs: set[tuple[int, int]] = set()
-        member_code_to_id: dict[str, int] = {}
-        existing_parent_roles: dict[int, set[str]] = {}
-        manifest = manifest_map.get(spec.tree_code)
-
-        if manifest is not None:
-            for member in manifest["members"]:
-                member_id = next_member_id
-                next_member_id += 1
-                generation_no = int(member.get("generation_no") or 1)
-                row = {
-                    "member_id": member_id,
-                    "tree_id": tree_id,
-                    "name": member["name"],
-                    "gender": member["gender"],
-                    "birth_date": _format_birth_date(member.get("birth_year")),
-                    "death_date": _format_death_date(member.get("death_year")),
-                    "generation_no": generation_no,
-                    "generation_name": member.get("generation_name") or "",
-                    "biography": f"Historical seed node for {spec.display_name}.",
-                    "is_alive": "false" if member.get("death_year") else "true",
-                }
-                dataset["member"].append(row)
-                members_by_generation.setdefault(generation_no, []).append(row)
-                member_code_to_id[member["member_code"]] = member_id
-                dataset["member_provenance"].append(
-                    {
-                        "member_id": member_id,
-                        "tree_id": tree_id,
-                        "tree_code": spec.tree_code,
-                        "node_type": "seed",
-                        "historical_real": "true",
-                        "seed_member_code": member["member_code"],
-                        "source_system": member.get("source_system", ""),
-                        "source_url": member.get("source_url", ""),
-                        "confidence": member.get("confidence", ""),
-                    }
-                )
-
-            for relation in manifest.get("parent_child", []):
-                child_member_id = member_code_to_id[relation["child_member_code"]]
-                dataset["parent_child"].append(
-                    {
-                        "tree_id": tree_id,
-                        "parent_member_id": member_code_to_id[relation["parent_member_code"]],
-                        "child_member_id": child_member_id,
-                        "parent_role": relation["parent_role"],
-                    }
-                )
-                existing_parent_roles.setdefault(child_member_id, set()).add(relation["parent_role"])
-
-            for marriage in manifest.get("marriages", []):
-                member_id_1, member_id_2 = _normalize_marriage_members(
-                    member_code_to_id[marriage["member_code_1"]],
-                    member_code_to_id[marriage["member_code_2"]],
-                )
-                marriage_pairs.add((member_id_1, member_id_2))
-                dataset["marriage"].append(
-                    {
-                        "tree_id": tree_id,
-                        "member_id_1": member_id_1,
-                        "member_id_2": member_id_2,
-                        "married_at": marriage.get("married_at", ""),
-                        "ended_at": marriage.get("ended_at", ""),
-                        "status": marriage.get("status", "active"),
-                    }
-                )
-
+        members_by_generation: dict[int, list[dict[str, Any]]] = {generation_no: [] for generation_no in range(1, spec.target_generations + 1)}
         target_counts = _default_generation_targets(spec.target_members, spec.target_generations)
-        for generation_no in range(1, spec.target_generations + 1):
-            members_by_generation.setdefault(generation_no, [])
+        marriage_pairs: set[tuple[int, int]] = set()
 
         for generation_no, target in enumerate(target_counts, start=1):
-            while len(members_by_generation[generation_no]) < target:
-                gender = "male" if len(members_by_generation[generation_no]) % 2 == 0 else "female"
+            for member_index in range(target):
+                gender = "male" if member_index % 2 == 0 else "female"
                 member_id = next_member_id
                 next_member_id += 1
-                birth_year = 1200 + generation_no * 18 + rng.randint(-4, 4)
+                birth_year = _generation_birth_year(spec, generation_no, rng)
+                is_alive, death_date = _life_profile(birth_year, rng, current_year=current_year)
                 row = {
                     "member_id": member_id,
                     "tree_id": tree_id,
-                    "name": _generated_name(rng, spec.surname, gender, generation_no, duplicate_rate=0.12),
+                    "name": _generated_name(rng, spec.surname, gender, generation_no, duplicate_rate=spec.duplicate_rate),
                     "gender": gender,
-                    "birth_date": _format_birth_date(birth_year),
-                    "death_date": "",
+                    "birth_date": _format_date(birth_year, 1, 1),
+                    "death_date": death_date,
                     "generation_no": generation_no,
-                    "generation_name": "",
-                    "biography": f"Generated descendant for Stage7 dataset: {spec.display_name}.",
-                    "is_alive": "true",
+                    "generation_name": _generation_token(generation_no),
+                    "biography": f"Rule-generated Stage7 member for {spec.display_name}.",
+                    "is_alive": "true" if is_alive else "false",
                 }
                 dataset["member"].append(row)
                 members_by_generation[generation_no].append(row)
@@ -340,63 +264,72 @@ def generate_dataset(
                         "tree_code": spec.tree_code,
                         "node_type": "generated",
                         "historical_real": "false",
-                        "seed_member_code": "",
-                        "source_system": "synthetic_generator",
-                        "source_url": "",
-                        "confidence": "generated",
+                        "rule_profile": "stage7_synthetic_v2",
+                        "latest_generation_birth_year": spec.latest_generation_birth_year,
+                        "generation_gap": spec.generation_gap,
                     }
                 )
 
         for generation_no in range(1, spec.target_generations):
             fathers = [row for row in members_by_generation[generation_no] if row["gender"] == "male"]
             mothers = [row for row in members_by_generation[generation_no] if row["gender"] == "female"]
-            if not fathers:
-                raise ValueError(f"Generation {generation_no} in {spec.tree_code} has no male members")
-            if not mothers:
-                raise ValueError(f"Generation {generation_no} in {spec.tree_code} has no female members")
+            children = members_by_generation[generation_no + 1]
+
+            if not fathers or not mothers:
+                raise ValueError(f"Generation {generation_no} in {spec.tree_code} does not have both genders")
 
             father_pointer = 0
             mother_pointer = 0
-            for child in members_by_generation[generation_no + 1]:
+            for child in children:
                 father = fathers[father_pointer % len(fathers)]
                 mother = mothers[mother_pointer % len(mothers)]
                 father_pointer += 1
                 mother_pointer += 1
 
-                child_roles = existing_parent_roles.setdefault(child["member_id"], set())
-                if "father" not in child_roles:
-                    dataset["parent_child"].append(
-                        {
-                            "tree_id": tree_id,
-                            "parent_member_id": father["member_id"],
-                            "child_member_id": child["member_id"],
-                            "parent_role": "father",
-                        }
-                    )
-                    child_roles.add("father")
-                if "mother" not in child_roles:
-                    dataset["parent_child"].append(
-                        {
-                            "tree_id": tree_id,
-                            "parent_member_id": mother["member_id"],
-                            "child_member_id": child["member_id"],
-                            "parent_role": "mother",
-                        }
-                    )
-                    child_roles.add("mother")
+                dataset["parent_child"].append(
+                    {
+                        "tree_id": tree_id,
+                        "parent_member_id": father["member_id"],
+                        "child_member_id": child["member_id"],
+                        "parent_role": "father",
+                    }
+                )
+                dataset["parent_child"].append(
+                    {
+                        "tree_id": tree_id,
+                        "parent_member_id": mother["member_id"],
+                        "child_member_id": child["member_id"],
+                        "parent_role": "mother",
+                    }
+                )
 
                 ordered_marriage = _normalize_marriage_members(father["member_id"], mother["member_id"])
                 if ordered_marriage not in marriage_pairs:
                     marriage_pairs.add(ordered_marriage)
-                    married_year = max(1, 1200 + generation_no * 18 + 18)
+                    father_birth_year = int(father["birth_date"][:4])
+                    mother_birth_year = int(mother["birth_date"][:4])
+                    child_birth_year = int(child["birth_date"][:4])
+                    married_year = min(child_birth_year - 1, max(father_birth_year, mother_birth_year) + 18 + rng.randint(0, 8))
+
+                    father_death_year = int(father["death_date"][:4]) if father["death_date"] else None
+                    mother_death_year = int(mother["death_date"][:4]) if mother["death_date"] else None
+                    ended_year_candidates = [year for year in [father_death_year, mother_death_year] if year is not None]
+                    if ended_year_candidates:
+                        ended_year = max(married_year, min(ended_year_candidates))
+                        status = "ended"
+                        ended_at = _format_date(ended_year, 12, 31)
+                    else:
+                        status = "active"
+                        ended_at = ""
+
                     dataset["marriage"].append(
                         {
                             "tree_id": tree_id,
                             "member_id_1": ordered_marriage[0],
                             "member_id_2": ordered_marriage[1],
-                            "married_at": _format_birth_date(married_year),
-                            "ended_at": "",
-                            "status": "active",
+                            "married_at": _format_date(married_year, 1, 1),
+                            "ended_at": ended_at,
+                            "status": status,
                         }
                     )
 

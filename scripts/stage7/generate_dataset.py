@@ -12,7 +12,7 @@ from scripts.stage7.stage7_dataset import (
     GENERATED_DIR,
     DEFAULT_RANDOM_SEED,
     generate_dataset,
-    load_seed_manifests,
+    load_tree_specs,
     summarize_dataset,
     write_dataset,
 )
@@ -34,8 +34,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    manifests = load_seed_manifests()
-    dataset = generate_dataset(manifests, random_seed=args.random_seed)
+    specs = load_tree_specs()
+    dataset = generate_dataset(specs=specs, random_seed=args.random_seed)
     write_dataset(dataset, args.output_dir)
     summary = summarize_dataset(dataset)
 

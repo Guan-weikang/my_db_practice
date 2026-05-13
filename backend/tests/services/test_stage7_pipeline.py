@@ -5,17 +5,26 @@ ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from scripts.stage7.stage7_dataset import TreeSpec, generate_dataset, load_seed_manifests, write_dataset
+from scripts.stage7.stage7_dataset import TreeSpec, generate_dataset, load_tree_specs, write_dataset
 
 
 def test_stage7_dataset_can_be_written_as_csv(tmp_path):
-    manifests = load_seed_manifests()
+    base_specs = load_tree_specs()
     specs = (
-        TreeSpec("han_liu", "汉朝刘氏", "刘", 60, 8, "pipeline test"),
-        TreeSpec("chen_synthetic", "合成陈氏", "陈", 40, 6, "pipeline test"),
+        TreeSpec("han_liu", "汉朝刘氏", "刘", 60, 8, "pipeline test", base_specs[0].latest_generation_birth_year, base_specs[0].generation_gap),
+        TreeSpec(
+            "chen_synthetic",
+            "合成陈氏",
+            "陈",
+            40,
+            6,
+            "pipeline test",
+            base_specs[5].latest_generation_birth_year,
+            base_specs[5].generation_gap,
+        ),
     )
 
-    dataset = generate_dataset(manifests, specs=specs, random_seed=7)
+    dataset = generate_dataset(specs=specs, random_seed=7)
     write_dataset(dataset, tmp_path)
 
     expected_files = {
@@ -32,9 +41,20 @@ def test_stage7_dataset_can_be_written_as_csv(tmp_path):
 
 
 def test_stage7_export_closure_expectation_from_generated_dataset():
-    manifests = load_seed_manifests()
-    specs = (TreeSpec("han_liu", "汉朝刘氏", "刘", 120, 10, "closure test"),)
-    dataset = generate_dataset(manifests, specs=specs, random_seed=9)
+    base_spec = load_tree_specs()[0]
+    specs = (
+        TreeSpec(
+            "han_liu",
+            "汉朝刘氏",
+            "刘",
+            120,
+            10,
+            "closure test",
+            base_spec.latest_generation_birth_year,
+            base_spec.generation_gap,
+        ),
+    )
+    dataset = generate_dataset(specs=specs, random_seed=9)
 
     member_ids = {row["member_id"] for row in dataset["member"]}
     for relation in dataset["parent_child"]:

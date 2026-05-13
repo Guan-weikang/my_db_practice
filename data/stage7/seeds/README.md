@@ -1,20 +1,16 @@
-# Stage7 Seed Manifests
+# Stage7 Tree Profiles
 
-本目录存放阶段七“真实种子谱系”清单。
+本目录不再保存任何真实历史人物 seed 数据。
 
-设计原则：
+阶段七现已切换为“全量规则生成”模式：
 
-- 只收录少量高知名度、可人工核验的真实人物
-- 只固定种子层，不追求完整还原真实家谱
-- 大规模成员由 `scripts/stage7/generate_dataset.py` 合成扩展
-- `birth_year` / `death_year` 可保留 BCE 或模糊年份；若超出数据库 `DATE` 友好范围，生成 CSV 时会自动留空，并把真实年份保留在 manifest 与 provenance 中
-- `source_system` / `source_url` 用于人工可追溯；当前仓库先提供 curated manifest，后续可扩展为自动抽取器
+- 族谱名称与规模配置仍保留
+- 所有成员均由生成器按统一规则产生
+- 不使用真实历史人物姓名、关系、生卒年
+- `manifest_index.json` 只保存树配置索引，不保存人物清单
 
-主要字段：
+构建索引命令：
 
-- `tree_code`：树编码
-- `members[].member_code`：种子成员编码
-- `members[].historical_real`：是否真实历史人物
-- `members[].confidence`：`high` / `medium` / `reference_only`
-- `parent_child[]`：父母关系
-- `marriages[]`：婚姻关系
+```bash
+python scripts/stage7/build_seed_manifests.py
+```

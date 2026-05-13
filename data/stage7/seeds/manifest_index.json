@@ -1,51 +1,107 @@
 {
-  "schema_version": 1,
-  "tree_count": 5,
+  "schema_version": 2,
+  "mode": "fully_synthetic",
+  "tree_count": 10,
   "trees": [
     {
       "tree_code": "han_liu",
       "display_name": "汉朝刘氏",
       "surname": "刘",
-      "seed_member_count": 5,
-      "parent_child_count": 4,
-      "marriage_count": 0,
-      "historical_basis": "汉朝皇室公开历史人物种子谱系"
-    },
-    {
-      "tree_code": "kong_clan",
-      "display_name": "孔氏",
-      "surname": "孔",
-      "seed_member_count": 3,
-      "parent_child_count": 2,
-      "marriage_count": 0,
-      "historical_basis": "孔氏公开历史人物种子谱系"
-    },
-    {
-      "tree_code": "ming_zhu",
-      "display_name": "明朝朱氏",
-      "surname": "朱",
-      "seed_member_count": 5,
-      "parent_child_count": 4,
-      "marriage_count": 0,
-      "historical_basis": "明朝皇室公开历史人物种子谱系"
+      "target_members": 8000,
+      "target_generations": 32,
+      "latest_generation_birth_year": 2008,
+      "generation_gap": 22,
+      "duplicate_rate": 0.12
     },
     {
       "tree_code": "tang_li",
       "display_name": "唐朝李氏",
       "surname": "李",
-      "seed_member_count": 5,
-      "parent_child_count": 4,
-      "marriage_count": 0,
-      "historical_basis": "唐朝皇室公开历史人物种子谱系"
+      "target_members": 10000,
+      "target_generations": 32,
+      "latest_generation_birth_year": 2006,
+      "generation_gap": 22,
+      "duplicate_rate": 0.12
+    },
+    {
+      "tree_code": "ming_zhu",
+      "display_name": "明朝朱氏",
+      "surname": "朱",
+      "target_members": 12000,
+      "target_generations": 33,
+      "latest_generation_birth_year": 2005,
+      "generation_gap": 22,
+      "duplicate_rate": 0.12
     },
     {
       "tree_code": "wuyue_qian",
       "display_name": "吴越钱氏",
       "surname": "钱",
-      "seed_member_count": 3,
-      "parent_child_count": 2,
-      "marriage_count": 0,
-      "historical_basis": "吴越钱氏公开历史人物种子谱系"
+      "target_members": 5000,
+      "target_generations": 30,
+      "latest_generation_birth_year": 2007,
+      "generation_gap": 21,
+      "duplicate_rate": 0.12
+    },
+    {
+      "tree_code": "kong_clan",
+      "display_name": "孔氏",
+      "surname": "孔",
+      "target_members": 55000,
+      "target_generations": 40,
+      "latest_generation_birth_year": 2003,
+      "generation_gap": 22,
+      "duplicate_rate": 0.12
+    },
+    {
+      "tree_code": "chen_synthetic",
+      "display_name": "合成陈氏",
+      "surname": "陈",
+      "target_members": 4000,
+      "target_generations": 30,
+      "latest_generation_birth_year": 2010,
+      "generation_gap": 21,
+      "duplicate_rate": 0.12
+    },
+    {
+      "tree_code": "wang_synthetic",
+      "display_name": "合成王氏",
+      "surname": "王",
+      "target_members": 3500,
+      "target_generations": 30,
+      "latest_generation_birth_year": 2011,
+      "generation_gap": 21,
+      "duplicate_rate": 0.12
+    },
+    {
+      "tree_code": "zhang_synthetic",
+      "display_name": "合成张氏",
+      "surname": "张",
+      "target_members": 3000,
+      "target_generations": 30,
+      "latest_generation_birth_year": 2010,
+      "generation_gap": 21,
+      "duplicate_rate": 0.12
+    },
+    {
+      "tree_code": "lin_synthetic",
+      "display_name": "合成林氏",
+      "surname": "林",
+      "target_members": 2500,
+      "target_generations": 30,
+      "latest_generation_birth_year": 2012,
+      "generation_gap": 21,
+      "duplicate_rate": 0.12
+    },
+    {
+      "tree_code": "zhao_synthetic",
+      "display_name": "合成赵氏",
+      "surname": "赵",
+      "target_members": 2000,
+      "target_generations": 30,
+      "latest_generation_birth_year": 2011,
+      "generation_gap": 21,
+      "duplicate_rate": 0.12
     }
   ]
 }
