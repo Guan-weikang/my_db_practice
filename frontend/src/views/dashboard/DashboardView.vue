@@ -1,184 +1,218 @@
 <template>
-  <section class="panel stack">
-    <div class="section-heading">
+  <section class="grid gap-6">
+    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div>
-        <p class="eyebrow">Stage 6</p>
-        <h1>Dashboard</h1>
-        <p class="muted">按族谱查看汇总统计与课程要求的三类分析结果。</p>
+        <p class="text-sm font-medium text-primary">总览</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-normal">族谱统计</h1>
+        <p class="mt-2 text-sm text-muted-foreground">选择一棵族谱，查看成员构成、代际寿命和重点成员清单。</p>
       </div>
-      <router-link
-        v-if="selectedTreeId"
-        class="button-link button-link--ghost"
-        :to="{ name: 'family-tree-detail', params: { treeId: selectedTreeId } }"
-      >
-        查看当前族谱
-      </router-link>
+
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <Select :model-value="selectedTreeValue" :disabled="loadingTrees || trees.length === 0" @update:model-value="handleTreeSelect">
+          <SelectTrigger class="w-full sm:w-72">
+            <SelectValue placeholder="选择族谱" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem v-for="tree in trees" :key="tree.tree_id" :value="String(tree.tree_id)">
+                {{ tree.tree_name }} · {{ roleLabel(tree.access_role) }}
+              </SelectItem>
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <Button :disabled="loadingAny || !selectedTreeId" variant="outline" @click="reloadAnalytics">
+          <RefreshCwIcon data-icon="inline-start" />
+          {{ loadingAny ? "刷新中" : "刷新" }}
+        </Button>
+        <Button v-if="selectedTreeId" as-child>
+          <RouterLink :to="{ name: 'family-tree-detail', params: { treeId: selectedTreeId } }">
+            查看族谱
+          </RouterLink>
+        </Button>
+      </div>
     </div>
 
-    <p v-if="feedback" class="feedback" :class="feedbackType === 'error' ? 'feedback--error' : 'feedback--success'">
-      {{ feedback }}
-    </p>
+    <Alert v-if="feedback" :variant="feedbackType === 'error' ? 'destructive' : 'default'">
+      <AlertTitle>{{ feedbackType === "error" ? "加载失败" : "已更新" }}</AlertTitle>
+      <AlertDescription>{{ feedback }}</AlertDescription>
+    </Alert>
 
-    <div v-if="loadingTrees" class="muted">正在加载可访问族谱...</div>
+    <Card v-if="loadingTrees">
+      <CardContent class="grid gap-3 p-6">
+        <Skeleton class="h-5 w-48" />
+        <Skeleton class="h-24 w-full" />
+      </CardContent>
+    </Card>
 
-    <div v-else-if="trees.length === 0" class="empty-state">
-      <strong>当前还没有可展示的族谱</strong>
-      <p class="muted">请先创建族谱，或确认当前账号是否具备读取权限。</p>
-    </div>
+    <Card v-else-if="trees.length === 0">
+      <CardHeader>
+        <CardTitle>暂无族谱</CardTitle>
+        <CardDescription>当前账号还没有可查看的族谱。</CardDescription>
+      </CardHeader>
+      <CardFooter>
+        <Button as-child>
+          <RouterLink :to="{ name: 'family-tree-list' }">前往族谱列表</RouterLink>
+        </Button>
+      </CardFooter>
+    </Card>
 
     <template v-else>
-      <form class="inline-form" @submit.prevent="reloadAnalytics">
-        <label class="field field--wide">
-          <span>当前族谱</span>
-          <select v-model.number="selectedTreeId" @change="handleTreeChange">
-            <option v-for="tree in trees" :key="tree.tree_id" :value="tree.tree_id">
-              {{ tree.tree_name }} (#{{ tree.tree_id }}) / {{ roleLabel(tree.access_role) }}
-            </option>
-          </select>
-        </label>
-        <button class="button button--ghost" :disabled="loadingAny" type="submit">
-          {{ loadingAny ? "刷新中..." : "刷新统计" }}
-        </button>
-      </form>
-
-      <div class="card-grid">
-        <article class="record-card">
-          <div class="record-card__meta">
-            <h2>汇总统计</h2>
-            <span class="role-pill role-pill--muted">Dashboard</span>
-          </div>
-          <p v-if="dashboardState.loading" class="muted">正在加载汇总统计...</p>
-          <p v-else-if="dashboardState.error" class="feedback feedback--error">{{ dashboardState.error }}</p>
-          <template v-else-if="dashboard">
-            <div class="stats-grid">
-              <div class="stat-box">
-                <span class="muted">总人数</span>
-                <strong>{{ dashboard.summary.total_members }}</strong>
-              </div>
-              <div class="stat-box">
-                <span class="muted">男性</span>
-                <strong>{{ dashboard.summary.male_count }}</strong>
-              </div>
-              <div class="stat-box">
-                <span class="muted">女性</span>
-                <strong>{{ dashboard.summary.female_count }}</strong>
-              </div>
-              <div class="stat-box">
-                <span class="muted">未知性别</span>
-                <strong>{{ dashboard.summary.unknown_count }}</strong>
-              </div>
-            </div>
-            <div class="stats-grid">
-              <div class="detail-item">
-                <span class="muted">男性比例</span>
-                <strong>{{ formatRatio(dashboard.summary.male_ratio) }}</strong>
-              </div>
-              <div class="detail-item">
-                <span class="muted">女性比例</span>
-                <strong>{{ formatRatio(dashboard.summary.female_ratio) }}</strong>
-              </div>
-            </div>
-          </template>
-        </article>
-
-        <article class="record-card">
-          <div class="record-card__meta">
-            <h2>平均寿命最长的一代</h2>
-            <span class="role-pill role-pill--muted">统计一</span>
-          </div>
-          <p v-if="lifespanState.loading" class="muted">正在计算代际寿命...</p>
-          <p v-else-if="lifespanState.error" class="feedback feedback--error">{{ lifespanState.error }}</p>
-          <div v-else-if="!maxAverageLifespan?.item" class="empty-state">
-            <strong>暂无可统计代际</strong>
-            <p class="muted">当前族谱缺少可用于寿命分析的代际或出生数据。</p>
-          </div>
-          <div v-else class="detail-grid">
-            <div class="detail-item">
-              <span class="muted">代际编号</span>
-              <strong>{{ maxAverageLifespan.item.generation_no }}</strong>
-            </div>
-            <div class="detail-item">
-              <span class="muted">平均寿命</span>
-              <strong>{{ maxAverageLifespan.item.avg_lifespan_years.toFixed(2) }} 年</strong>
-            </div>
-          </div>
-        </article>
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardHeader class="pb-2">
+            <CardDescription>总人数</CardDescription>
+            <CardTitle class="text-3xl">{{ formatNumber(dashboard?.summary.total_members) }}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader class="pb-2">
+            <CardDescription>男性</CardDescription>
+            <CardTitle class="text-3xl">{{ formatNumber(dashboard?.summary.male_count) }}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader class="pb-2">
+            <CardDescription>女性</CardDescription>
+            <CardTitle class="text-3xl">{{ formatNumber(dashboard?.summary.female_count) }}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader class="pb-2">
+            <CardDescription>未知性别</CardDescription>
+            <CardTitle class="text-3xl">{{ formatNumber(dashboard?.summary.unknown_count) }}</CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
-      <div class="detail-grid dashboard-blocks">
-        <article class="detail-item detail-item--wide">
-          <div class="section-heading">
-            <div>
-              <h3>超过 50 岁且没有配偶的男性成员</h3>
-              <p class="muted">按出生日期升序展示，已结束婚姻也视为有过配偶。</p>
+      <div class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>成员构成</CardTitle>
+            <CardDescription>按性别汇总当前族谱成员。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div v-if="dashboardState.loading" class="grid gap-3">
+              <Skeleton class="h-48 w-full" />
             </div>
-            <span class="role-pill role-pill--muted">统计二</span>
-          </div>
-          <p v-if="olderMaleState.loading" class="muted">正在筛选成员...</p>
-          <p v-else-if="olderMaleState.error" class="feedback feedback--error">{{ olderMaleState.error }}</p>
-          <div v-else-if="olderThan50UnmarriedMale.length === 0" class="empty-state">
-            <strong>没有命中成员</strong>
-            <p class="muted">当前族谱中没有符合“超过 50 岁且无配偶”的男性成员。</p>
-          </div>
-          <table v-else class="table">
-            <thead>
-              <tr>
-                <th>成员</th>
-                <th>出生日期</th>
-                <th>年龄</th>
-                <th>代际</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in olderThan50UnmarriedMale" :key="item.member_id">
-                <td>
-                  <strong>{{ item.name }}</strong>
-                  <div class="muted">#{{ item.member_id }}</div>
-                </td>
-                <td>{{ item.birth_date }}</td>
-                <td>{{ item.age_years }}</td>
-                <td>{{ item.generation_no ?? "未填写" }} / {{ item.generation_name ?? "未填写" }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </article>
+            <Alert v-else-if="dashboardState.error" variant="destructive">
+              <AlertTitle>统计加载失败</AlertTitle>
+              <AlertDescription>{{ dashboardState.error }}</AlertDescription>
+            </Alert>
+            <ChartContainer v-else :config="chartConfig" class="h-64">
+              <div class="flex h-full flex-col justify-end gap-4">
+                <div
+                  v-for="item in chartItems"
+                  :key="item.key"
+                  class="grid gap-2"
+                >
+                  <div class="flex items-center justify-between gap-3 text-sm">
+                    <span class="font-medium">{{ item.label }}</span>
+                    <span class="text-muted-foreground">{{ item.value }} 人 · {{ item.ratio }}</span>
+                  </div>
+                  <div class="h-4 overflow-hidden rounded-full bg-muted">
+                    <div class="h-full rounded-full" :class="item.className" :style="{ width: item.width }" />
+                  </div>
+                </div>
+              </div>
+            </ChartContainer>
+          </CardContent>
+        </Card>
 
-        <article class="detail-item detail-item--wide">
-          <div class="section-heading">
-            <div>
-              <h3>出生年份早于本代平均出生年份的成员</h3>
-              <p class="muted">按代际、出生年份、成员编号排序，方便直接核对课程 SQL 结果。</p>
+        <Card>
+          <CardHeader>
+            <CardTitle>平均寿命最长的一代</CardTitle>
+            <CardDescription>展示当前族谱中平均寿命最高的代际。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div v-if="lifespanState.loading" class="grid gap-3">
+              <Skeleton class="h-8 w-40" />
+              <Skeleton class="h-16 w-full" />
             </div>
-            <span class="role-pill role-pill--muted">统计三</span>
-          </div>
-          <p v-if="birthYearState.loading" class="muted">正在计算出生年份对比...</p>
-          <p v-else-if="birthYearState.error" class="feedback feedback--error">{{ birthYearState.error }}</p>
-          <div v-else-if="beforeGenerationAverageBirthYear.length === 0" class="empty-state">
-            <strong>没有命中成员</strong>
-            <p class="muted">当前族谱中没有成员早于本代平均出生年份。</p>
-          </div>
-          <table v-else class="table">
-            <thead>
-              <tr>
-                <th>成员</th>
-                <th>代际</th>
-                <th>出生年份</th>
-                <th>本代平均出生年份</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in beforeGenerationAverageBirthYear" :key="item.member_id">
-                <td>
-                  <strong>{{ item.name }}</strong>
-                  <div class="muted">#{{ item.member_id }}</div>
-                </td>
-                <td>{{ item.generation_no }} / {{ item.generation_name ?? "未填写" }}</td>
-                <td>{{ item.birth_year }}</td>
-                <td>{{ item.avg_birth_year.toFixed(2) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </article>
+            <Alert v-else-if="lifespanState.error" variant="destructive">
+              <AlertTitle>代际统计失败</AlertTitle>
+              <AlertDescription>{{ lifespanState.error }}</AlertDescription>
+            </Alert>
+            <div v-else-if="!maxAverageLifespan?.item" class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              当前族谱还没有足够的出生和代际信息。
+            </div>
+            <div v-else class="grid gap-4 sm:grid-cols-2">
+              <div class="rounded-md border p-4">
+                <p class="text-sm text-muted-foreground">代际编号</p>
+                <p class="mt-2 text-3xl font-semibold">{{ maxAverageLifespan.item.generation_no }}</p>
+              </div>
+              <div class="rounded-md border p-4">
+                <p class="text-sm text-muted-foreground">平均寿命</p>
+                <p class="mt-2 text-3xl font-semibold">{{ maxAverageLifespan.item.avg_lifespan_years.toFixed(2) }} 年</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div class="grid gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>超过 50 岁且没有配偶的男性成员</CardTitle>
+            <CardDescription>用于快速查看当前族谱中的重点成员。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DataState :loading="olderMaleState.loading" :error="olderMaleState.error" empty-title="没有符合条件的成员" :empty="olderThan50UnmarriedMale.length === 0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>成员</TableHead>
+                    <TableHead>出生日期</TableHead>
+                    <TableHead>年龄</TableHead>
+                    <TableHead>代际</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow v-for="item in olderThan50UnmarriedMale" :key="item.member_id">
+                    <TableCell>
+                      <div class="font-medium">{{ item.name }}</div>
+                      <div class="text-xs text-muted-foreground">#{{ item.member_id }}</div>
+                    </TableCell>
+                    <TableCell>{{ item.birth_date }}</TableCell>
+                    <TableCell>{{ item.age_years }}</TableCell>
+                    <TableCell>{{ item.generation_no ?? "未填写" }} / {{ item.generation_name ?? "未填写" }}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </DataState>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>出生年份早于本代平均出生年份的成员</CardTitle>
+            <CardDescription>按代际和出生年份核对成员分布。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DataState :loading="birthYearState.loading" :error="birthYearState.error" empty-title="没有符合条件的成员" :empty="beforeGenerationAverageBirthYear.length === 0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>成员</TableHead>
+                    <TableHead>代际</TableHead>
+                    <TableHead>出生年份</TableHead>
+                    <TableHead>本代平均出生年份</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow v-for="item in beforeGenerationAverageBirthYear" :key="item.member_id">
+                    <TableCell>
+                      <div class="font-medium">{{ item.name }}</div>
+                      <div class="text-xs text-muted-foreground">#{{ item.member_id }}</div>
+                    </TableCell>
+                    <TableCell>{{ item.generation_no }} / {{ item.generation_name ?? "未填写" }}</TableCell>
+                    <TableCell>{{ item.birth_year }}</TableCell>
+                    <TableCell>{{ item.avg_birth_year.toFixed(2) }}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </DataState>
+          </CardContent>
+        </Card>
       </div>
     </template>
   </section>
@@ -186,8 +220,10 @@
 
 <script setup lang="ts">
 import axios from "axios";
-import { computed, onMounted, ref } from "vue";
+import type { Component } from "vue";
+import { computed, defineComponent, h, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { RefreshCwIcon } from "lucide-vue-next";
 
 import {
   fetchBeforeGenerationAverageBirthYear,
@@ -198,13 +234,50 @@ import {
   type DashboardResponse,
   type GenerationMaxAverageLifespanResponse,
   type OlderThan50UnmarriedMaleItem
-} from "../../api/analytics";
-import { fetchFamilyTrees, type FamilyTreeListItem } from "../../api/familyTree";
+} from "@/api/analytics";
+import { fetchFamilyTrees, type FamilyTreeListItem } from "@/api/familyTree";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type LoadState = {
   loading: boolean;
   error: string;
 };
+
+const DataState = defineComponent({
+  props: {
+    loading: { type: Boolean, required: true },
+    error: { type: String, required: true },
+    empty: { type: Boolean, required: true },
+    emptyTitle: { type: String, required: true }
+  },
+  setup(props, { slots }) {
+    return () => {
+      if (props.loading) {
+        return h("div", { class: "grid gap-3" }, [
+          h(Skeleton as Component, { class: "h-10 w-full" }),
+          h(Skeleton as Component, { class: "h-10 w-full" }),
+          h(Skeleton as Component, { class: "h-10 w-full" })
+        ]);
+      }
+      if (props.error) {
+        return h(Alert as Component, { variant: "destructive" }, () => [
+          h(AlertTitle as Component, null, () => "加载失败"),
+          h(AlertDescription as Component, null, () => props.error)
+        ]);
+      }
+      if (props.empty) {
+        return h("div", { class: "rounded-md border border-dashed p-4 text-sm text-muted-foreground" }, props.emptyTitle);
+      }
+      return slots.default?.();
+    };
+  }
+});
 
 const route = useRoute();
 const router = useRouter();
@@ -225,6 +298,12 @@ const lifespanState = ref<LoadState>({ loading: false, error: "" });
 const olderMaleState = ref<LoadState>({ loading: false, error: "" });
 const birthYearState = ref<LoadState>({ loading: false, error: "" });
 
+const chartConfig = {
+  male: { label: "男性", color: "var(--chart-1)" },
+  female: { label: "女性", color: "var(--chart-2)" },
+  unknown: { label: "未知", color: "var(--chart-4)" }
+} satisfies ChartConfig;
+
 const loadingAny = computed(
   () =>
     dashboardState.value.loading ||
@@ -232,6 +311,24 @@ const loadingAny = computed(
     olderMaleState.value.loading ||
     birthYearState.value.loading
 );
+
+const selectedTreeValue = computed(() => (selectedTreeId.value ? String(selectedTreeId.value) : undefined));
+
+const chartItems = computed(() => {
+  const summary = dashboard.value?.summary;
+  const total = summary?.total_members ?? 0;
+  const items = [
+    { key: "male", label: "男性", value: summary?.male_count ?? 0, className: "bg-[var(--chart-1)]" },
+    { key: "female", label: "女性", value: summary?.female_count ?? 0, className: "bg-[var(--chart-2)]" },
+    { key: "unknown", label: "未知", value: summary?.unknown_count ?? 0, className: "bg-[var(--chart-4)]" }
+  ];
+
+  return items.map((item) => ({
+    ...item,
+    ratio: total > 0 ? `${((item.value / total) * 100).toFixed(2)}%` : "暂无",
+    width: total > 0 ? `${Math.max((item.value / total) * 100, item.value > 0 ? 4 : 0)}%` : "0%"
+  }));
+});
 
 function roleLabel(role: string) {
   if (role === "creator") {
@@ -243,11 +340,8 @@ function roleLabel(role: string) {
   return "只读";
 }
 
-function formatRatio(value: number | null) {
-  if (value === null) {
-    return "暂无";
-  }
-  return `${(value * 100).toFixed(2)}%`;
+function formatNumber(value: number | undefined) {
+  return typeof value === "number" ? value.toLocaleString("zh-CN") : "0";
 }
 
 function errorMessage(error: unknown, fallback: string) {
@@ -259,7 +353,6 @@ function errorMessage(error: unknown, fallback: string) {
 
 async function syncTreeQuery(treeId: number) {
   await router.replace({
-    name: "dashboard",
     query: {
       ...route.query,
       treeId: String(treeId)
@@ -267,27 +360,81 @@ async function syncTreeQuery(treeId: number) {
   });
 }
 
-async function loadFamilyTreeOptions() {
+async function handleTreeSelect(value: string | number | null | undefined) {
+  const treeId = Number(value);
+  if (!Number.isFinite(treeId) || treeId <= 0) {
+    return;
+  }
+  selectedTreeId.value = treeId;
+  await syncTreeQuery(treeId);
+  await reloadAnalytics();
+}
+
+async function loadTrees() {
   loadingTrees.value = true;
   feedback.value = "";
   try {
-    const response = await fetchFamilyTrees();
+    const response = await fetchFamilyTrees(1, 100);
     trees.value = response.data.items;
-
-    if (trees.value.length === 0) {
-      selectedTreeId.value = 0;
-      return;
+    const queryTreeId = Number(route.query.treeId);
+    selectedTreeId.value =
+      Number.isFinite(queryTreeId) && queryTreeId > 0 ? queryTreeId : trees.value[0]?.tree_id ?? 0;
+    if (selectedTreeId.value) {
+      await reloadAnalytics();
     }
-
-    const queryTreeId = Number(route.query.treeId ?? 0) || 0;
-    const matchedTree = trees.value.find((tree) => tree.tree_id === queryTreeId);
-    selectedTreeId.value = matchedTree?.tree_id ?? trees.value[0].tree_id;
-    await syncTreeQuery(selectedTreeId.value);
   } catch (error) {
     feedbackType.value = "error";
-    feedback.value = errorMessage(error, "族谱列表加载失败。");
+    feedback.value = errorMessage(error, "族谱列表加载失败，请稍后重试。");
   } finally {
     loadingTrees.value = false;
+  }
+}
+
+async function loadDashboard(treeId: number) {
+  dashboardState.value = { loading: true, error: "" };
+  try {
+    const response = await fetchDashboard(treeId);
+    dashboard.value = response.data;
+  } catch (error) {
+    dashboardState.value.error = errorMessage(error, "统计信息加载失败，请稍后重试。");
+  } finally {
+    dashboardState.value.loading = false;
+  }
+}
+
+async function loadLifespan(treeId: number) {
+  lifespanState.value = { loading: true, error: "" };
+  try {
+    const response = await fetchMaxAverageLifespan(treeId);
+    maxAverageLifespan.value = response.data;
+  } catch (error) {
+    lifespanState.value.error = errorMessage(error, "代际寿命加载失败，请稍后重试。");
+  } finally {
+    lifespanState.value.loading = false;
+  }
+}
+
+async function loadOlderMale(treeId: number) {
+  olderMaleState.value = { loading: true, error: "" };
+  try {
+    const response = await fetchOlderThan50UnmarriedMale(treeId);
+    olderThan50UnmarriedMale.value = response.data.items;
+  } catch (error) {
+    olderMaleState.value.error = errorMessage(error, "成员清单加载失败，请稍后重试。");
+  } finally {
+    olderMaleState.value.loading = false;
+  }
+}
+
+async function loadBirthYear(treeId: number) {
+  birthYearState.value = { loading: true, error: "" };
+  try {
+    const response = await fetchBeforeGenerationAverageBirthYear(treeId);
+    beforeGenerationAverageBirthYear.value = response.data.items;
+  } catch (error) {
+    birthYearState.value.error = errorMessage(error, "出生年份清单加载失败，请稍后重试。");
+  } finally {
+    birthYearState.value.loading = false;
   }
 }
 
@@ -297,98 +444,13 @@ async function reloadAnalytics() {
   }
 
   feedback.value = "";
-  dashboardState.value = { loading: true, error: "" };
-  lifespanState.value = { loading: true, error: "" };
-  olderMaleState.value = { loading: true, error: "" };
-  birthYearState.value = { loading: true, error: "" };
-
-  await Promise.allSettled([
-    (async () => {
-      try {
-        const response = await fetchDashboard(selectedTreeId.value);
-        dashboard.value = response.data;
-      } catch (error) {
-        dashboard.value = null;
-        dashboardState.value.error = errorMessage(error, "Dashboard 汇总统计加载失败。");
-      } finally {
-        dashboardState.value.loading = false;
-      }
-    })(),
-    (async () => {
-      try {
-        const response = await fetchMaxAverageLifespan(selectedTreeId.value);
-        maxAverageLifespan.value = response.data;
-      } catch (error) {
-        maxAverageLifespan.value = null;
-        lifespanState.value.error = errorMessage(error, "平均寿命统计加载失败。");
-      } finally {
-        lifespanState.value.loading = false;
-      }
-    })(),
-    (async () => {
-      try {
-        const response = await fetchOlderThan50UnmarriedMale(selectedTreeId.value);
-        olderThan50UnmarriedMale.value = response.data.items;
-      } catch (error) {
-        olderThan50UnmarriedMale.value = [];
-        olderMaleState.value.error = errorMessage(error, "无配偶男性统计加载失败。");
-      } finally {
-        olderMaleState.value.loading = false;
-      }
-    })(),
-    (async () => {
-      try {
-        const response = await fetchBeforeGenerationAverageBirthYear(selectedTreeId.value);
-        beforeGenerationAverageBirthYear.value = response.data.items;
-      } catch (error) {
-        beforeGenerationAverageBirthYear.value = [];
-        birthYearState.value.error = errorMessage(error, "出生年份统计加载失败。");
-      } finally {
-        birthYearState.value.loading = false;
-      }
-    })()
+  await Promise.all([
+    loadDashboard(selectedTreeId.value),
+    loadLifespan(selectedTreeId.value),
+    loadOlderMale(selectedTreeId.value),
+    loadBirthYear(selectedTreeId.value)
   ]);
-
-  const anyError =
-    dashboardState.value.error ||
-    lifespanState.value.error ||
-    olderMaleState.value.error ||
-    birthYearState.value.error;
-
-  feedbackType.value = anyError ? "error" : "success";
-  feedback.value = anyError ? "部分统计加载失败，请查看各区块错误信息。" : "统计结果已刷新。";
 }
 
-async function handleTreeChange() {
-  await syncTreeQuery(selectedTreeId.value);
-  await reloadAnalytics();
-}
-
-onMounted(async () => {
-  await loadFamilyTreeOptions();
-  if (selectedTreeId.value) {
-    await reloadAnalytics();
-  }
-});
+onMounted(loadTrees);
 </script>
-
-<style scoped>
-.stats-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-}
-
-.stat-box {
-  display: grid;
-  gap: 6px;
-  padding: 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  background: #f8fafc;
-}
-
-.dashboard-blocks {
-  grid-template-columns: 1fr;
-}
-</style>

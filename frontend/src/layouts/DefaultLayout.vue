@@ -24,11 +24,11 @@
                     as="a"
                     :href="href"
                     :is-active="isActive"
-                    tooltip="Dashboard"
+                    tooltip="总览"
                     @click="navigate"
                   >
                     <LayoutDashboardIcon />
-                    <span>Dashboard</span>
+                    <span>总览</span>
                   </SidebarMenuButton>
                 </RouterLink>
               </SidebarMenuItem>
@@ -357,7 +357,7 @@ const pageTitle = computed(() => {
   }
 
   const titles: Record<string, string> = {
-    dashboard: "Dashboard",
+    dashboard: "总览",
     "family-tree-list": "族谱列表",
     "family-tree-detail": "族谱详情",
     collaborators: "协作者",

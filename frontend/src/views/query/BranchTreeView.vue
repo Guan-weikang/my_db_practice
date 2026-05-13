@@ -1,63 +1,81 @@
 <template>
-  <section class="panel stack">
-    <div class="section-heading">
+  <section class="grid gap-6">
+    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div>
-        <p class="eyebrow">Stage 5</p>
-        <h1>分支树预览</h1>
+        <p class="text-sm font-medium text-primary">查询</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-normal">分支树</h1>
+        <p class="mt-2 text-sm text-muted-foreground">输入根成员，按层级查看后代分支。</p>
       </div>
-      <router-link class="button-link button-link--ghost" :to="{ name: 'family-tree-detail', params: { treeId } }">
-        返回族谱详情
-      </router-link>
+      <Button as-child variant="outline">
+        <RouterLink :to="{ name: 'family-tree-detail', params: { treeId } }">返回族谱</RouterLink>
+      </Button>
     </div>
 
-    <p v-if="feedback" class="feedback" :class="feedbackType === 'error' ? 'feedback--error' : 'feedback--success'">
-      {{ feedback }}
-    </p>
-
-    <form class="inline-form" @submit.prevent="handleLoadTree">
-      <label class="field">
-        <span>根成员 ID</span>
-        <input v-model.number="rootMemberId" min="1" required type="number" />
-      </label>
-      <label class="field">
-        <span>最大深度</span>
-        <input v-model.number="maxDepth" max="10" min="1" type="number" />
-      </label>
-      <button class="button" :disabled="loading" type="submit">{{ loading ? "加载中..." : "查看分支树" }}</button>
-    </form>
-
-    <div v-if="loading" class="muted">正在加载后代分支...</div>
-    <div v-else-if="tree" class="stack">
-      <div class="detail-item">
-        <span class="muted">根成员</span>
-        <strong>{{ tree.root_member.name }} (#{{ tree.root_member.member_id }})</strong>
-        <p class="muted">最大深度：{{ tree.max_depth }}</p>
-      </div>
-
-      <div v-if="tree.nodes.length === 0" class="empty-state">
-        <strong>未返回节点</strong>
-        <p class="muted">当前根成员没有可展示的分支节点。</p>
-      </div>
-
-      <div v-else class="stack">
-        <div
-          v-for="node in tree.nodes"
-          :key="`${node.path_member_ids.join('-')}-${node.member_id}`"
-          class="tree-node"
-          :style="{ '--depth': String(node.depth) }"
-        >
-          <div class="tree-node__card">
-            <strong>{{ node.name }}</strong>
-            <div class="muted">
-              #{{ node.member_id }} / 深度 {{ node.depth }} / {{ relationshipLabel(node.incoming_parent_role) }}
-            </div>
-            <div class="muted">
-              代际：{{ node.generation_no ?? "未填写" }} / {{ node.generation_name ?? "未填写" }}
-            </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>查询条件</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form class="grid gap-4 md:grid-cols-[220px_180px_auto]" @submit.prevent="handleLoadTree">
+          <div class="grid gap-2">
+            <Label for="root-member">根成员 ID</Label>
+            <Input id="root-member" v-model.number="rootMemberId" min="1" required type="number" />
           </div>
+          <div class="grid gap-2">
+            <Label for="max-depth">最大深度</Label>
+            <Input id="max-depth" v-model.number="maxDepth" max="10" min="1" type="number" />
+          </div>
+          <div class="flex items-end">
+            <Button class="w-full" :disabled="loading" type="submit">
+              <Spinner v-if="loading" data-icon="inline-start" />
+              {{ loading ? "加载中" : "查看分支" }}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+
+    <Alert v-if="feedback" :variant="feedbackType === 'error' ? 'destructive' : 'default'">
+      <AlertTitle>{{ feedbackType === "error" ? "加载失败" : "加载完成" }}</AlertTitle>
+      <AlertDescription>{{ feedback }}</AlertDescription>
+    </Alert>
+
+    <Card v-if="loading">
+      <CardContent class="grid gap-3 p-6">
+        <Skeleton class="h-12 w-full" />
+        <Skeleton class="h-12 w-11/12" />
+        <Skeleton class="h-12 w-10/12" />
+      </CardContent>
+    </Card>
+
+    <Card v-else-if="tree">
+      <CardHeader>
+        <CardTitle>{{ tree.root_member.name }} 的后代分支</CardTitle>
+        <CardDescription>根成员 #{{ tree.root_member.member_id }}，最大深度 {{ tree.max_depth }}。</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div v-if="tree.nodes.length === 0" class="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+          当前根成员没有可展示的分支节点。
         </div>
-      </div>
-    </div>
+        <div v-else class="grid gap-3">
+          <RouterLink
+            v-for="node in tree.nodes"
+            :key="`${node.path_member_ids.join('-')}-${node.member_id}`"
+            class="block rounded-md border bg-card p-4 transition hover:border-primary/50 hover:bg-accent/50"
+            :style="{ marginLeft: `${Math.min(node.depth, 8) * 24}px` }"
+            :to="{ name: 'member-detail', params: { treeId, memberId: node.member_id } }"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p class="font-medium">{{ node.name }}</p>
+                <p class="text-xs text-muted-foreground">#{{ node.member_id }} · 深度 {{ node.depth }} · {{ relationshipLabel(node.incoming_parent_role) }}</p>
+              </div>
+              <Badge variant="outline">{{ node.generation_no ?? "未填写" }} 代</Badge>
+            </div>
+          </RouterLink>
+        </div>
+      </CardContent>
+    </Card>
   </section>
 </template>
 
@@ -66,7 +84,15 @@ import axios from "axios";
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
-import { fetchBranchTree, type BranchTreeResponse } from "../../api/search";
+import { fetchBranchTree, type BranchTreeResponse } from "@/api/search";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 const route = useRoute();
 const treeId = computed(() => Number(route.params.treeId));
@@ -87,6 +113,13 @@ function relationshipLabel(role: string | null) {
   return "根节点";
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    return (error.response?.data as { message?: string } | undefined)?.message ?? fallback;
+  }
+  return fallback;
+}
+
 async function handleLoadTree() {
   if (!rootMemberId.value) {
     feedbackType.value = "error";
@@ -104,11 +137,7 @@ async function handleLoadTree() {
   } catch (error) {
     tree.value = null;
     feedbackType.value = "error";
-    if (axios.isAxiosError(error)) {
-      feedback.value = (error.response?.data as { message?: string } | undefined)?.message ?? "分支树加载失败。";
-    } else {
-      feedback.value = "分支树加载失败。";
-    }
+    feedback.value = errorMessage(error, "分支树加载失败，请稍后重试。");
   } finally {
     loading.value = false;
   }

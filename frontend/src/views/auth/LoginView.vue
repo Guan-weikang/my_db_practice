@@ -2,7 +2,7 @@
   <section class="auth-card">
     <div>
       <h2>登录</h2>
-      <p class="muted">登录后可访问受保护的 Dashboard、族谱和查询页面。</p>
+      <p class="muted">登录后可查看总览、族谱和查询页面。</p>
     </div>
 
     <form class="auth-form" @submit.prevent="handleSubmit">

@@ -47,8 +47,13 @@ export interface MemberUpdatePayload {
   biography?: string | null;
 }
 
-export function fetchMembers(treeId: number) {
-  return client.get<PaginatedMemberResponse>(`/family-trees/${treeId}/members`);
+export function fetchMembers(treeId: number, page = 1, pageSize = 20) {
+  return client.get<PaginatedMemberResponse>(`/family-trees/${treeId}/members`, {
+    params: {
+      page,
+      page_size: pageSize
+    }
+  });
 }
 
 export function fetchMemberDetail(treeId: number, memberId: number) {

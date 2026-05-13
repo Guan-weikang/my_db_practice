@@ -2,7 +2,7 @@
   <section class="panel stack">
     <div class="section-heading">
       <div>
-        <p class="eyebrow">Stage 4</p>
+        <p class="eyebrow">成员</p>
         <h1>成员详情</h1>
       </div>
       <router-link class="button-link button-link--ghost" :to="{ name: 'member-list', params: { treeId } }">
@@ -236,7 +236,7 @@
         <div class="section-heading">
           <div>
             <h3>婚姻关系</h3>
-            <p class="muted">婚姻状态支持 `active` 与 `ended`。</p>
+            <p class="muted">可维护当前成员的配偶和婚姻状态。</p>
           </div>
         </div>
 
@@ -252,8 +252,8 @@
           <label class="field">
             <span>状态</span>
             <select v-model="marriageForm.status">
-              <option value="active">active</option>
-              <option value="ended">ended</option>
+              <option value="active">持续中</option>
+              <option value="ended">已结束</option>
             </select>
           </label>
           <label class="field">
@@ -285,7 +285,7 @@
                 <strong>{{ item.name }}</strong>
                 <div class="muted">#{{ item.spouse_member_id }} / {{ genderLabel(item.gender) }}</div>
               </td>
-              <td>{{ item.status }}</td>
+              <td>{{ marriageStatusLabel(item.status) }}</td>
               <td>{{ item.married_at ?? "未填" }} / {{ item.ended_at ?? "未结束" }}</td>
               <td>
                 <div class="detail-hero__actions">
@@ -295,7 +295,7 @@
                     type="button"
                     @click="handleMarkMarriageEnded(item.spouse_member_id, item.married_at)"
                   >
-                    标记 ended
+                    标记已结束
                   </button>
                   <button
                     v-if="canModify"
@@ -391,6 +391,10 @@ function genderLabel(gender: string) {
     return "女";
   }
   return "未知";
+}
+
+function marriageStatusLabel(status: string) {
+  return status === "ended" ? "已结束" : "持续中";
 }
 
 function syncEditForm() {
@@ -558,7 +562,7 @@ async function handleMarkMarriageEnded(spouseMemberId: number, marriedAt: string
       status: "ended"
     });
     feedbackType.value = "success";
-    feedback.value = "婚姻状态已更新为 ended。";
+    feedback.value = "婚姻状态已更新为已结束。";
   } catch (error) {
     feedbackType.value = "error";
     if (axios.isAxiosError(error)) {

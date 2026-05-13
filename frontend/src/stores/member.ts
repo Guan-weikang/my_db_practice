@@ -35,16 +35,22 @@ export const useMemberStore = defineStore("member", {
     parents: [] as ParentRelationItem[],
     children: [] as ChildRelationItem[],
     spouses: [] as SpouseRelationItem[],
+    total: 0,
+    page: 1,
+    pageSize: 20,
     loadingList: false,
     loadingDetail: false,
     loadingRelations: false
   }),
   actions: {
-    async loadMembers(treeId: number) {
+    async loadMembers(treeId: number, page = 1, pageSize = 20) {
       this.loadingList = true;
       try {
-        const response = await fetchMembers(treeId);
+        const response = await fetchMembers(treeId, page, pageSize);
         this.list = response.data.items;
+        this.total = response.data.total;
+        this.page = response.data.page;
+        this.pageSize = response.data.page_size;
       } finally {
         this.loadingList = false;
       }
@@ -76,18 +82,18 @@ export const useMemberStore = defineStore("member", {
     },
     async createMember(treeId: number, payload: MemberCreatePayload) {
       const response = await createMember(treeId, payload);
-      await this.loadMembers(treeId);
+      await this.loadMembers(treeId, this.page, this.pageSize);
       return response.data;
     },
     async updateMember(treeId: number, memberId: number, payload: MemberUpdatePayload) {
       const response = await updateMember(treeId, memberId, payload);
       this.currentMember = response.data;
-      await this.loadMembers(treeId);
+      await this.loadMembers(treeId, this.page, this.pageSize);
       return response.data;
     },
     async deleteMember(treeId: number, memberId: number) {
       const response = await deleteMember(treeId, memberId);
-      await this.loadMembers(treeId);
+      await this.loadMembers(treeId, this.page, this.pageSize);
       if (this.currentMemberId === memberId) {
         this.currentMember = null;
         this.parents = [];

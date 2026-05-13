@@ -1,119 +1,189 @@
 <template>
-  <section class="panel stack">
-    <div class="section-heading">
+  <section class="grid gap-6">
+    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div>
-        <p class="eyebrow">Stage 4</p>
-        <h1>成员列表</h1>
-        <p class="muted">成员列表默认对所有已登录用户可读；只有创建者和协作者可以新增成员。</p>
+        <p class="text-sm font-medium text-primary">成员</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-normal">成员列表</h1>
+        <p class="mt-2 text-sm text-muted-foreground">分页查看成员，避免一次加载过多数据。</p>
       </div>
-      <div class="detail-hero__actions">
-        <router-link class="button-link button-link--ghost" :to="{ name: 'family-tree-detail', params: { treeId } }">
-          返回族谱
-        </router-link>
-        <button class="button button--ghost" type="button" @click="refreshList">刷新列表</button>
+      <div class="flex flex-wrap gap-2">
+        <Button as-child variant="outline">
+          <RouterLink :to="{ name: 'family-tree-detail', params: { treeId } }">返回族谱</RouterLink>
+        </Button>
+        <Button variant="outline" :disabled="memberStore.loadingList" @click="refreshList">
+          <RefreshCwIcon data-icon="inline-start" />
+          刷新
+        </Button>
+        <Sheet v-if="canCreate" v-model:open="createOpen">
+          <SheetTrigger as-child>
+            <Button>
+              <PlusIcon data-icon="inline-start" />
+              新增成员
+            </Button>
+          </SheetTrigger>
+          <SheetContent class="overflow-y-auto sm:max-w-xl">
+            <SheetHeader>
+              <SheetTitle>新增成员</SheetTitle>
+              <SheetDescription>填写成员基础信息，后续可在详情页维护关系。</SheetDescription>
+            </SheetHeader>
+            <form class="mt-6 grid gap-4" @submit.prevent="handleCreate">
+              <div class="grid gap-2">
+                <Label for="member-name">姓名</Label>
+                <Input id="member-name" v-model.trim="createForm.name" required />
+              </div>
+              <div class="grid gap-2">
+                <Label>性别</Label>
+                <Select v-model="createForm.gender">
+                  <SelectTrigger class="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="male">男</SelectItem>
+                      <SelectItem value="female">女</SelectItem>
+                      <SelectItem value="unknown">未知</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-2">
+                  <Label for="birth-date">出生日期</Label>
+                  <Input id="birth-date" v-model="createForm.birth_date" type="date" />
+                </div>
+                <div class="grid gap-2">
+                  <Label for="death-date">去世日期</Label>
+                  <Input id="death-date" v-model="createForm.death_date" :disabled="createForm.is_alive" type="date" />
+                </div>
+              </div>
+              <label class="flex items-center gap-2 rounded-md border p-3 text-sm">
+                <Checkbox v-model:checked="createForm.is_alive" />
+                <span>当前在世</span>
+              </label>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-2">
+                  <Label for="generation-no">代际编号</Label>
+                  <Input id="generation-no" v-model.number="createForm.generation_no" min="1" type="number" />
+                </div>
+                <div class="grid gap-2">
+                  <Label for="generation-name">字辈/派语</Label>
+                  <Input id="generation-name" v-model.trim="createForm.generation_name" />
+                </div>
+              </div>
+              <div class="grid gap-2">
+                <Label for="biography">生平简介</Label>
+                <Textarea id="biography" v-model.trim="createForm.biography" rows="4" />
+              </div>
+              <Alert v-if="feedback && feedbackType === 'error'" variant="destructive">
+                <AlertTitle>新增失败</AlertTitle>
+                <AlertDescription>{{ feedback }}</AlertDescription>
+              </Alert>
+              <SheetFooter>
+                <Button type="submit" :disabled="submittingCreate">
+                  <Spinner v-if="submittingCreate" data-icon="inline-start" />
+                  {{ submittingCreate ? "创建中" : "创建成员" }}
+                </Button>
+              </SheetFooter>
+            </form>
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
 
-    <p v-if="feedback" class="feedback" :class="feedbackType === 'error' ? 'feedback--error' : 'feedback--success'">
-      {{ feedback }}
-    </p>
+    <Alert v-if="feedback && feedbackType === 'success'">
+      <AlertTitle>已完成</AlertTitle>
+      <AlertDescription>{{ feedback }}</AlertDescription>
+    </Alert>
 
-    <div v-if="familyTreeStore.currentTree" class="detail-item">
-      <span class="muted">当前访问角色</span>
-      <div class="detail-hero__actions">
-        <strong>{{ familyTreeStore.currentTree.tree_name }}</strong>
-        <span class="role-pill">{{ roleLabel(familyTreeStore.currentTree.access_role) }}</span>
-      </div>
-    </div>
+    <Alert v-if="familyTreeStore.currentTree && !canCreate">
+      <AlertTitle>当前为只读权限</AlertTitle>
+      <AlertDescription>你可以查看成员列表和详情，不能新增或编辑成员。</AlertDescription>
+    </Alert>
 
-    <form v-if="canCreate" class="inline-form" @submit.prevent="handleCreate">
-      <label class="field">
-        <span>姓名</span>
-        <input v-model.trim="createForm.name" required />
-      </label>
-      <label class="field">
-        <span>性别</span>
-        <select v-model="createForm.gender">
-          <option value="male">男</option>
-          <option value="female">女</option>
-          <option value="unknown">未知</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>出生日期</span>
-        <input v-model="createForm.birth_date" type="date" />
-      </label>
-      <label class="field">
-        <span>去世日期</span>
-        <input v-model="createForm.death_date" :disabled="createForm.is_alive" type="date" />
-      </label>
-      <label class="field">
-        <span>在世</span>
-        <select v-model="aliveSelect">
-          <option value="true">是</option>
-          <option value="false">否</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>代际编号</span>
-        <input v-model.number="createForm.generation_no" min="1" type="number" />
-      </label>
-      <label class="field">
-        <span>字辈/派语</span>
-        <input v-model.trim="createForm.generation_name" />
-      </label>
-      <label class="field field--wide">
-        <span>生平简介</span>
-        <textarea v-model.trim="createForm.biography" rows="3" />
-      </label>
-      <button class="button" :disabled="submittingCreate" type="submit">
-        {{ submittingCreate ? "创建中..." : "新增成员" }}
-      </button>
-    </form>
-
-    <div v-else class="empty-state">
-      <strong>当前为只读视角</strong>
-      <p class="muted">你仍可查看成员列表与详情，但不能新增成员。</p>
-    </div>
-
-    <p v-if="memberStore.loadingList" class="muted">正在加载成员列表...</p>
-
-    <div v-else-if="memberStore.list.length === 0" class="empty-state">
-      <strong>当前族谱还没有成员</strong>
-      <p class="muted">先新增一位成员，后续才能继续维护父母子女和婚姻关系。</p>
-    </div>
-
-    <table v-else class="table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>姓名</th>
-          <th>性别</th>
-          <th>代际</th>
-          <th>出生</th>
-          <th>状态</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="member in memberStore.list" :key="member.member_id">
-          <td>#{{ member.member_id }}</td>
-          <td>
-            <strong>{{ member.name }}</strong>
-            <div class="muted">{{ member.generation_name || "无字辈" }}</div>
-          </td>
-          <td>{{ genderLabel(member.gender) }}</td>
-          <td>{{ member.generation_no ?? "未填写" }}</td>
-          <td>{{ member.birth_date ?? "未知" }}</td>
-          <td>{{ member.is_alive ? "在世" : "已故" }}</td>
-          <td>
-            <router-link class="button-link" :to="{ name: 'member-detail', params: { treeId, memberId: member.member_id } }">
-              查看详情
-            </router-link>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <Card>
+      <CardHeader>
+        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle>{{ familyTreeStore.currentTree?.tree_name ?? "成员" }}</CardTitle>
+            <CardDescription>
+              共 {{ memberStore.total.toLocaleString("zh-CN") }} 人，当前第 {{ page }} 页。
+            </CardDescription>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-muted-foreground">每页</span>
+            <Select :model-value="String(pageSize)" @update:model-value="changePageSize">
+              <SelectTrigger class="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div v-if="memberStore.loadingList" class="grid gap-3">
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+          <Skeleton class="h-10 w-full" />
+        </div>
+        <div v-else-if="memberStore.list.length === 0" class="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+          当前族谱暂无成员。具备编辑权限时，可以先新增一位成员。
+        </div>
+        <div v-else class="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>成员</TableHead>
+                <TableHead>性别</TableHead>
+                <TableHead>代际</TableHead>
+                <TableHead>出生</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead class="text-right">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="member in memberStore.list" :key="member.member_id">
+                <TableCell>
+                  <div class="font-medium">{{ member.name }}</div>
+                  <div class="text-xs text-muted-foreground">#{{ member.member_id }} · {{ member.generation_name || "无字辈" }}</div>
+                </TableCell>
+                <TableCell>{{ genderLabel(member.gender) }}</TableCell>
+                <TableCell>{{ member.generation_no ?? "未填写" }}</TableCell>
+                <TableCell>{{ member.birth_date ?? "未知" }}</TableCell>
+                <TableCell>
+                  <Badge :variant="member.is_alive ? 'secondary' : 'outline'">{{ member.is_alive ? "在世" : "已故" }}</Badge>
+                </TableCell>
+                <TableCell class="text-right">
+                  <Button as-child size="sm">
+                    <RouterLink :to="{ name: 'member-detail', params: { treeId, memberId: member.member_id } }">
+                      查看详情
+                    </RouterLink>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+      <CardFooter class="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p class="text-sm text-muted-foreground">
+          第 {{ page }} / {{ totalPages }} 页
+        </p>
+        <div class="flex gap-2">
+          <Button variant="outline" :disabled="page <= 1 || memberStore.loadingList" @click="goPage(page - 1)">
+            上一页
+          </Button>
+          <Button variant="outline" :disabled="page >= totalPages || memberStore.loadingList" @click="goPage(page + 1)">
+            下一页
+          </Button>
+        </div>
+      </CardFooter>
+    </Card>
   </section>
 </template>
 
@@ -121,17 +191,35 @@
 import axios from "axios";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { PlusIcon, RefreshCwIcon } from "lucide-vue-next";
+import { toast } from "vue-sonner";
 
-import { useFamilyTreePermission } from "../../composables/useFamilyTreePermission";
-import { useFamilyTreeStore } from "../../stores/familyTree";
-import { useMemberStore } from "../../stores/member";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { useFamilyTreePermission } from "@/composables/useFamilyTreePermission";
+import { useFamilyTreeStore } from "@/stores/familyTree";
+import { useMemberStore } from "@/stores/member";
 
 const route = useRoute();
 const familyTreeStore = useFamilyTreeStore();
 const memberStore = useMemberStore();
 const { canEdit } = useFamilyTreePermission();
 const treeId = computed(() => Number(route.params.treeId));
+const page = ref(1);
+const pageSize = ref(20);
 const submittingCreate = ref(false);
+const createOpen = ref(false);
 const feedback = ref("");
 const feedbackType = ref<"success" | "error">("success");
 const createForm = reactive({
@@ -145,27 +233,8 @@ const createForm = reactive({
   biography: ""
 });
 
-const aliveSelect = computed({
-  get: () => (createForm.is_alive ? "true" : "false"),
-  set: (value: string) => {
-    createForm.is_alive = value === "true";
-    if (createForm.is_alive) {
-      createForm.death_date = "";
-    }
-  }
-});
-
 const canCreate = computed(() => canEdit(familyTreeStore.currentTree?.access_role ?? "reader"));
-
-function roleLabel(role: string) {
-  if (role === "creator") {
-    return "创建者";
-  }
-  if (role === "collaborator") {
-    return "协作者";
-  }
-  return "只读";
-}
+const totalPages = computed(() => Math.max(1, Math.ceil(memberStore.total / pageSize.value)));
 
 function genderLabel(gender: string) {
   if (gender === "male") {
@@ -177,14 +246,37 @@ function genderLabel(gender: string) {
   return "未知";
 }
 
+function errorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    return (error.response?.data as { message?: string } | undefined)?.message ?? fallback;
+  }
+  return fallback;
+}
+
 async function loadPage() {
   feedback.value = "";
-  await familyTreeStore.loadFamilyTreeDetail(treeId.value);
-  await memberStore.loadMembers(treeId.value);
+  try {
+    await familyTreeStore.loadFamilyTreeDetail(treeId.value);
+    await memberStore.loadMembers(treeId.value, page.value, pageSize.value);
+  } catch (error) {
+    feedbackType.value = "error";
+    feedback.value = errorMessage(error, "成员列表加载失败，请稍后重试。");
+  }
 }
 
 async function refreshList() {
   await loadPage();
+}
+
+async function goPage(targetPage: number) {
+  page.value = Math.min(Math.max(targetPage, 1), totalPages.value);
+  await memberStore.loadMembers(treeId.value, page.value, pageSize.value);
+}
+
+async function changePageSize(value: string | number | null | undefined) {
+  pageSize.value = Number(value) || 20;
+  page.value = 1;
+  await memberStore.loadMembers(treeId.value, page.value, pageSize.value);
 }
 
 async function handleCreate() {
@@ -209,25 +301,22 @@ async function handleCreate() {
     createForm.generation_no = null;
     createForm.generation_name = "";
     createForm.biography = "";
+    createOpen.value = false;
     feedbackType.value = "success";
     feedback.value = `成员 #${createdMember.member_id} 创建成功。`;
+    toast.success("成员创建成功");
   } catch (error) {
     feedbackType.value = "error";
-    if (axios.isAxiosError(error)) {
-      feedback.value = (error.response?.data as { message?: string } | undefined)?.message ?? "成员创建失败。";
-    } else {
-      feedback.value = "成员创建失败。";
-    }
+    feedback.value = errorMessage(error, "成员创建失败，请检查填写内容后重试。");
   } finally {
     submittingCreate.value = false;
   }
 }
 
 watch(treeId, async () => {
+  page.value = 1;
   await loadPage();
 });
 
-onMounted(async () => {
-  await loadPage();
-});
+onMounted(loadPage);
 </script>
