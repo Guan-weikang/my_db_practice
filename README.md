@@ -4,8 +4,24 @@
 
 - `backend/`：FastAPI + SQLAlchemy 2.0 后端骨架
 - `frontend/`：Vue 3 + Vite 前端骨架
+- `docs/`：需求、数据库、架构、计划与阶段执行文档
+- `deploy/`：后续 Docker、Nginx 与部署配置目录
 - `scripts/`：数据生成与导入脚本目录
 - `data/`：数据文件目录
+
+## 当前状态
+
+阶段一“工程基线与开发环境收口”已完成以下基线能力：
+
+- PostgreSQL 主表、索引、触发器和 Alembic 初始迁移已落地
+- 独立 SQL 初始化脚本已提供：`scripts/sql/family_tree_init.sql`
+- FastAPI 应用可启动，已接入基础 CORS、日志、统一错误响应和健康检查
+- 前端可启动并成功构建
+- 后端最小测试基座已建立，并包含健康检查与错误响应冒烟测试
+- 阶段二后端认证闭环已接入：注册、登录、刷新令牌、登出、当前用户与族谱权限依赖
+- 前端已接入登录态持久化、令牌自动续期、路由守卫和最小登录/注册页面
+- 阶段三族谱与协作者模块已完成最小闭环：族谱 CRUD、协作者管理、前端列表/详情/协作者管理页已可联调
+- 当前阶段三权限规则已固定为：所有已登录用户默认可读取所有族谱；`creator` 可管理协作者和删除空族谱；`collaborator` 可编辑族谱但不可管理协作者；`reader` 与未显式授权用户只读
 
 ## 环境要求
 
@@ -27,6 +43,21 @@ cp frontend/.env.example frontend/.env.development
 
 - PostgreSQL：`postgresql+asyncpg://postgres:123456@localhost:5432/family_tree_db`
 - Redis：`redis://localhost:6379/0`
+
+前端默认 API 地址：
+
+- `VITE_API_BASE_URL=http://localhost:8000/api/v1`
+
+联调注意：
+
+- 若前端使用 `http://127.0.0.1:5173` 或 `http://127.0.0.1:4173` 访问，而后端 CORS 只放行 `http://localhost:5173`，浏览器会在登录前的 `OPTIONS` 预检阶段直接失败。
+- 手工联调时应保证前端访问地址与 `backend/.env` 中的 CORS 白名单一致。
+
+前端阶段二默认使用：
+
+- `localStorage` 持久化 `accessToken`、`refreshToken` 和当前用户信息
+- Axios 响应拦截器在收到 `401` 时自动尝试 `POST /auth/refresh`
+- 刷新失败后清空登录态，并由路由守卫带回登录页
 
 ## 安装依赖
 
@@ -53,12 +84,25 @@ cd backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+健康检查：
+
+```bash
+curl http://localhost:8000/api/v1/health/
+```
+
 前端开发：
 
 ```bash
 cd frontend
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
+
+阶段二前端认证主流程：
+
+1. 访问受保护路由时，未登录会自动跳转到 `/auth/login?redirect=原目标路径`
+2. 登录或注册成功后，前端自动保存会话并跳回原目标路径
+3. 刷新页面时，前端会先恢复本地会话，再通过 `/api/v1/auth/me` 校验当前登录态
+4. Access Token 失效时，前端会自动使用 Refresh Token 续期
 
 ## Alembic
 
@@ -74,9 +118,50 @@ alembic upgrade head
 
 Alembic 会读取 `backend/.env` 中的 `DATABASE_URL`，并自动将 `asyncpg` 连接转换为迁移使用的 `psycopg` 连接。
 
+若不走 Alembic，也可以直接执行初始化脚本：
+
+```bash
+psql -h localhost -U postgres -d family_tree_db -f /home/mochen/db_practice/scripts/sql/family_tree_init.sql
+```
+
+## 测试
+
+后端基础冒烟测试：
+
+```bash
+pytest backend/tests -q
+```
+
+前端构建测试：
+
+```bash
+cd frontend
+npm run build
+```
+
+阶段三补充验证：
+
+```bash
+python scripts/dev/seed_stage3_manual_test_data.py
+bash /home/mochen/db_practice/scripts/dev/stage3_probe.sh
+```
+
+## 目录说明
+
+- `backend/tests/api/`：后端 API 冒烟测试
+- `backend/tests/services/`：后续服务层测试
+- `backend/tests/queries/`：后续查询层测试
+- `scripts/sql/`：数据库初始化 SQL 脚本
+- `scripts/dev/seed_stage3_manual_test_data.py`：阶段三联调种子数据脚本
+- `scripts/dev/stage3_probe.sh`：阶段三接口与权限快速探测脚本
+- `deploy/`：当前为空目录，留待后续阶段补充 Docker Compose、Nginx 和部署文件
+- `docs/寻根溯源族谱管理系统-总开发计划.md`：总开发计划
+- `docs/阶段一-工程基线与开发环境收口-详细执行与测试验收文档.md`：阶段一详细计划
+- `docs/阶段三-族谱与协作者模块-详细执行与测试验收文档.md`：阶段三详细计划
+- `docs/阶段三-工作包H-测试环境准备与手工联调说明.md`：阶段三联调与测试数据说明
+
 ## 后续工作
 
-- PostgreSQL 建表与初始迁移
-- 认证与权限实现
-- 族谱、成员、关系的完整业务逻辑
-- Vue 页面与接口联调
+- 阶段三收尾：文档、联调说明与验收记录收口
+- 阶段四：成员与关系维护
+- 阶段五及之后：复杂查询、统计、数据生成、性能优化、联调与部署
