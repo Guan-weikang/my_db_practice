@@ -97,6 +97,55 @@ cd frontend
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
+## Docker 部署
+
+当前仓库已补齐演示级容器化部署：
+
+- `docker-compose.yml`
+- `backend/Dockerfile`
+- `frontend/Dockerfile`
+- `deploy/nginx/default.conf`
+- `.env.compose.example`
+
+推荐步骤：
+
+```bash
+cp .env.compose.example .env
+docker compose up --build -d
+```
+
+访问入口：
+
+- 前端与统一入口：`http://localhost`
+- 后端健康检查：`http://localhost/api/v1/health/`
+
+说明：
+
+- `nginx` 是唯一对外入口，前端通过它访问 `/api/v1`
+- `backend` 容器启动时会先执行 `alembic upgrade head`
+- `postgres` 与 `redis` 使用命名卷持久化
+- 如需改端口或密钥，修改根目录 `.env`
+
+导入 Stage7 演示数据：
+
+```bash
+docker compose --profile tools run --rm stage7-import
+```
+
+这条命令会：
+
+- 连接容器内 `postgres` 与 `redis`
+- 清理旧的 Stage7 数据
+- 从 `data/stage7/generated/*.csv` 重新导入 10 棵演示族谱
+- 清理 `cache:v1:*` Redis 缓存键
+
+停止与清理：
+
+```bash
+docker compose down
+docker compose down -v
+```
+
 阶段二前端认证主流程：
 
 1. 访问受保护路由时，未登录会自动跳转到 `/auth/login?redirect=原目标路径`

@@ -10,6 +10,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+!.env.compose.example
 !**/.env.example
 .venv/
 conda-meta/
@@ -28,3 +29,5 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+
