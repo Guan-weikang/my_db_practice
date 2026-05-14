@@ -319,6 +319,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
+import { useFamilyTreeStore } from "@/stores/familyTree";
 
 type QueryItem = {
   name: "member-search" | "branch-tree" | "ancestor-query" | "kinship-query";
@@ -330,6 +331,7 @@ const route = useRoute();
 const router = useRouter();
 const appStore = useAppStore();
 const authStore = useAuthStore();
+const familyTreeStore = useFamilyTreeStore();
 
 const trees = ref<FamilyTreeListItem[]>([]);
 const loadingTrees = ref(false);
@@ -433,4 +435,14 @@ watch(routeTreeId, (treeId) => {
 onMounted(() => {
   void loadTrees();
 });
+
+watch(
+  () => familyTreeStore.list,
+  (list) => {
+    if (list.length > 0) {
+      trees.value = list;
+    }
+  },
+  { deep: true }
+);
 </script>

@@ -182,6 +182,36 @@ async def test_member_crud_flow_for_editor_roles(client, db_session):
     assert deleted_detail_response.json()["code"] == "NOT_FOUND"
 
 
+async def test_member_id_range_returns_tree_bounds_for_reader(client, db_session):
+    creator_username = _unique("member_range_creator")
+    reader_username = _unique("member_range_reader")
+    creator = await _create_user(db_session, username=creator_username, email=f"{creator_username}@example.com")
+    reader = await _create_user(db_session, username=reader_username, email=f"{reader_username}@example.com")
+    tree = await _create_tree(db_session, creator_user_id=creator.user_id, tree_name="Member Range Tree")
+    first_member = await _create_member(db_session, tree_id=tree.tree_id, name="Range First", generation_no=1)
+    second_member = await _create_member(db_session, tree_id=tree.tree_id, name="Range Second", generation_no=2)
+    await _grant_role(
+        db_session,
+        tree_id=tree.tree_id,
+        user_id=reader.user_id,
+        invited_by=creator.user_id,
+        access_role="reader",
+    )
+
+    reader_token = await _login(client, username=reader_username)
+    response = await client.get(
+        f"/api/v1/family-trees/{tree.tree_id}/members/id-range",
+        headers={"Authorization": f"Bearer {reader_token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "min_member_id": first_member.member_id,
+        "max_member_id": second_member.member_id,
+        "total": 2,
+    }
+
+
 async def test_member_reading_allowed_but_write_denied_for_reader_and_viewer(client, db_session):
     creator_username = _unique("member_owner")
     reader_username = _unique("member_reader")

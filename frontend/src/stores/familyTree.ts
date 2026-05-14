@@ -62,6 +62,18 @@ export const useFamilyTreeStore = defineStore("familyTree", {
     async updateFamilyTree(treeId: number, payload: FamilyTreeUpdatePayload) {
       const response = await updateFamilyTree(treeId, payload);
       this.currentTree = response.data;
+      this.list = this.list.map((tree) =>
+        tree.tree_id === treeId
+          ? {
+              ...tree,
+              tree_name: response.data.tree_name,
+              surname: response.data.surname,
+              compiled_at: response.data.compiled_at,
+              description: response.data.description,
+              access_role: response.data.access_role
+            }
+          : tree
+      );
       await this.loadFamilyTrees();
       return response.data;
     },

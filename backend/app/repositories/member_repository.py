@@ -37,6 +37,21 @@ class MemberRepository:
         result = await self.session.execute(select(func.count(Member.member_id)).where(Member.tree_id == tree_id))
         return int(result.scalar_one())
 
+    async def get_member_id_range_by_tree_id(self, tree_id: int) -> tuple[int | None, int | None, int]:
+        result = await self.session.execute(
+            select(
+                func.min(Member.member_id),
+                func.max(Member.member_id),
+                func.count(Member.member_id),
+            ).where(Member.tree_id == tree_id)
+        )
+        min_member_id, max_member_id, total = result.one()
+        return (
+            int(min_member_id) if min_member_id is not None else None,
+            int(max_member_id) if max_member_id is not None else None,
+            int(total),
+        )
+
     async def create(self, *, tree_id: int, values: Mapping[str, object | None]) -> Member:
         member = Member(tree_id=tree_id, **values)
         self.session.add(member)

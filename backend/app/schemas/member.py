@@ -50,3 +50,9 @@ class PaginatedMemberResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class MemberIdRangeResponse(BaseModel):
+    min_member_id: int | None = None
+    max_member_id: int | None = None
+    total: int

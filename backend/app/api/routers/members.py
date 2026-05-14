@@ -6,6 +6,7 @@ from app.schemas.common import MessageResponse
 from app.schemas.member import (
     MemberCreateRequest,
     MemberDetailResponse,
+    MemberIdRangeResponse,
     MemberUpdateRequest,
     PaginatedMemberResponse,
 )
@@ -28,6 +29,15 @@ async def list_members(
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedMemberResponse:
     return await _member_service(session).list_by_tree(tree_id=tree_id, page=page, page_size=page_size)
+
+
+@router.get("/id-range", response_model=MemberIdRangeResponse)
+async def get_member_id_range(
+    tree_id: int,
+    _: TreePermissionContext = Depends(require_tree_reader),
+    session: AsyncSession = Depends(get_db_session),
+) -> MemberIdRangeResponse:
+    return await _member_service(session).get_id_range(tree_id=tree_id)
 
 
 @router.post("", response_model=MemberDetailResponse, status_code=status.HTTP_201_CREATED)

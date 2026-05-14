@@ -25,6 +25,12 @@ export interface PaginatedMemberResponse {
   page_size: number;
 }
 
+export interface MemberIdRangeResponse {
+  min_member_id: number | null;
+  max_member_id: number | null;
+  total: number;
+}
+
 export interface MemberCreatePayload {
   name: string;
   gender: "male" | "female" | "unknown";
@@ -58,6 +64,10 @@ export function fetchMembers(treeId: number, page = 1, pageSize = 20) {
 
 export function fetchMemberDetail(treeId: number, memberId: number) {
   return client.get<MemberDetailResponse>(`/family-trees/${treeId}/members/${memberId}`);
+}
+
+export function fetchMemberIdRange(treeId: number) {
+  return client.get<MemberIdRangeResponse>(`/family-trees/${treeId}/members/id-range`);
 }
 
 export function createMember(treeId: number, payload: MemberCreatePayload) {

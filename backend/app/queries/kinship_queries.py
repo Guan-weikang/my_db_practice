@@ -1,65 +1,47 @@
-KINSHIP_PATH_QUERY = """
-WITH RECURSIVE relation_edges AS (
-    SELECT
-        pc.tree_id,
-        pc.parent_member_id AS from_member,
-        pc.child_member_id AS to_member
-    FROM parent_child pc
-    WHERE pc.tree_id = :tree_id
-
-    UNION ALL
-
-    SELECT
-        pc.tree_id,
-        pc.child_member_id AS from_member,
-        pc.parent_member_id AS to_member
-    FROM parent_child pc
-    WHERE pc.tree_id = :tree_id
-
-    UNION ALL
-
-    SELECT
-        mg.tree_id,
-        mg.member_id_1 AS from_member,
-        mg.member_id_2 AS to_member
-    FROM marriage mg
-    WHERE mg.tree_id = :tree_id
-      AND (:include_ended_marriages OR mg.status = 'active')
-
-    UNION ALL
-
-    SELECT
-        mg.tree_id,
-        mg.member_id_2 AS from_member,
-        mg.member_id_1 AS to_member
-    FROM marriage mg
-    WHERE mg.tree_id = :tree_id
-      AND (:include_ended_marriages OR mg.status = 'active')
-),
-path_search AS (
-    SELECT
-        :tree_id AS tree_id,
-        CAST(:member_a AS bigint) AS current_member,
-        ARRAY[:member_a]::bigint[] AS path_member_ids
-
-    UNION ALL
-
-    SELECT
-        relation_edges.tree_id,
-        relation_edges.to_member,
-        path_search.path_member_ids || relation_edges.to_member
-    FROM path_search
-    JOIN relation_edges
-      ON relation_edges.tree_id = path_search.tree_id
-     AND relation_edges.from_member = path_search.current_member
-    WHERE array_length(path_search.path_member_ids, 1) - 1 < :max_depth
-      AND NOT relation_edges.to_member = ANY(path_search.path_member_ids)
+KINSHIP_NEIGHBOR_QUERY = """
+WITH frontier(member_id) AS (
+    SELECT unnest(CAST(:frontier_member_ids AS bigint[]))
 )
-SELECT path_member_ids
-FROM path_search
-WHERE current_member = :member_b
-ORDER BY array_length(path_member_ids, 1), path_member_ids
-LIMIT 1;
+SELECT
+    frontier.member_id AS from_member,
+    pc.child_member_id AS to_member
+FROM frontier
+JOIN parent_child pc
+  ON pc.tree_id = :tree_id
+ AND pc.parent_member_id = frontier.member_id
+
+UNION ALL
+
+SELECT
+    frontier.member_id AS from_member,
+    pc.parent_member_id AS to_member
+FROM frontier
+JOIN parent_child pc
+  ON pc.tree_id = :tree_id
+ AND pc.child_member_id = frontier.member_id
+
+UNION ALL
+
+SELECT
+    frontier.member_id AS from_member,
+    mg.member_id_2 AS to_member
+FROM frontier
+JOIN marriage mg
+  ON mg.tree_id = :tree_id
+ AND mg.member_id_1 = frontier.member_id
+ AND (:include_ended_marriages OR mg.status = 'active')
+
+UNION ALL
+
+SELECT
+    frontier.member_id AS from_member,
+    mg.member_id_1 AS to_member
+FROM frontier
+JOIN marriage mg
+  ON mg.tree_id = :tree_id
+ AND mg.member_id_2 = frontier.member_id
+ AND (:include_ended_marriages OR mg.status = 'active')
+ORDER BY from_member, to_member;
 """
 
 

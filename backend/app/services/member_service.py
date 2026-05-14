@@ -6,6 +6,7 @@ from app.repositories.relationship_repository import RelationshipRepository
 from app.schemas.member import (
     MemberCreateRequest,
     MemberDetailResponse,
+    MemberIdRangeResponse,
     MemberListItem,
     MemberUpdateRequest,
     PaginatedMemberResponse,
@@ -27,6 +28,14 @@ class MemberService:
             total=total,
             page=page,
             page_size=page_size,
+        )
+
+    async def get_id_range(self, *, tree_id: int) -> MemberIdRangeResponse:
+        min_member_id, max_member_id, total = await self.member_repository.get_member_id_range_by_tree_id(tree_id)
+        return MemberIdRangeResponse(
+            min_member_id=min_member_id,
+            max_member_id=max_member_id,
+            total=total,
         )
 
     async def get_detail(self, *, tree_id: int, member_id: int) -> MemberDetailResponse:

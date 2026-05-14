@@ -6,7 +6,7 @@ from app.queries.ancestor_queries import ANCESTOR_QUERY
 from app.queries.kinship_queries import (
     KINSHIP_PATH_EDGE_DETAILS_QUERY,
     KINSHIP_PATH_NODE_DETAILS_QUERY,
-    KINSHIP_PATH_QUERY,
+    KINSHIP_NEIGHBOR_QUERY,
 )
 from app.repositories.member_repository import MemberRepository
 from app.schemas.kinship import AncestorNode, AncestorResponse, KinshipPathEdge, KinshipPathResponse
@@ -75,21 +75,16 @@ class KinshipService:
                 edges=[],
             )
 
-        path_result = await self.session.execute(
-            text(KINSHIP_PATH_QUERY),
-            {
-                "tree_id": tree_id,
-                "member_a": member_a,
-                "member_b": member_b,
-                "max_depth": max_depth,
-                "include_ended_marriages": include_ended_marriages,
-            },
+        path_member_ids = await self._find_path_member_ids(
+            tree_id=tree_id,
+            member_a=member_a,
+            member_b=member_b,
+            max_depth=max_depth,
+            include_ended_marriages=include_ended_marriages,
         )
-        path_row = path_result.first()
-        if path_row is None:
+        if path_member_ids is None:
             return KinshipPathResponse(exists=False, hop_count=None, nodes=[], edges=[])
 
-        path_member_ids = [int(member_id) for member_id in path_row._mapping["path_member_ids"]]
         node_rows = await self.session.execute(
             text(KINSHIP_PATH_NODE_DETAILS_QUERY),
             {
@@ -135,6 +130,78 @@ class KinshipService:
             nodes=nodes,
             edges=edges,
         )
+
+    async def _find_path_member_ids(
+        self,
+        *,
+        tree_id: int,
+        member_a: int,
+        member_b: int,
+        max_depth: int,
+        include_ended_marriages: bool,
+    ) -> list[int] | None:
+        start_paths: dict[int, list[int]] = {member_a: [member_a]}
+        target_paths: dict[int, list[int]] = {member_b: [member_b]}
+        start_frontier = {member_a}
+        target_frontier = {member_b}
+
+        for _ in range(max_depth):
+            expand_from_start = len(start_frontier) <= len(target_frontier)
+            active_frontier = start_frontier if expand_from_start else target_frontier
+            active_paths = start_paths if expand_from_start else target_paths
+            other_paths = target_paths if expand_from_start else start_paths
+
+            if not active_frontier:
+                return None
+
+            edges = await self._load_neighbor_edges(
+                tree_id=tree_id,
+                frontier_member_ids=active_frontier,
+                include_ended_marriages=include_ended_marriages,
+            )
+            next_frontier: set[int] = set()
+
+            for from_member, to_member in edges:
+                if to_member in active_paths:
+                    continue
+
+                path = [*active_paths[from_member], to_member]
+                if len(path) - 1 > max_depth:
+                    continue
+
+                active_paths[to_member] = path
+                if to_member in other_paths:
+                    if expand_from_start:
+                        combined_path = path + list(reversed(other_paths[to_member]))[1:]
+                    else:
+                        combined_path = other_paths[to_member] + list(reversed(path))[1:]
+                    if len(combined_path) - 1 <= max_depth:
+                        return combined_path
+                next_frontier.add(to_member)
+
+            if expand_from_start:
+                start_frontier = next_frontier
+            else:
+                target_frontier = next_frontier
+
+        return None
+
+    async def _load_neighbor_edges(
+        self,
+        *,
+        tree_id: int,
+        frontier_member_ids: set[int],
+        include_ended_marriages: bool,
+    ) -> list[tuple[int, int]]:
+        result = await self.session.execute(
+            text(KINSHIP_NEIGHBOR_QUERY),
+            {
+                "tree_id": tree_id,
+                "frontier_member_ids": sorted(frontier_member_ids),
+                "include_ended_marriages": include_ended_marriages,
+            },
+        )
+        return [(int(row["from_member"]), int(row["to_member"])) for row in [dict(record._mapping) for record in result.all()]]
 
     @staticmethod
     def _validate_ancestor_depth(max_depth: int) -> None:

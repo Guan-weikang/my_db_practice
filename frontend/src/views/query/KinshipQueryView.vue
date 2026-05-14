@@ -19,11 +19,13 @@
         <form class="grid gap-4 md:grid-cols-[180px_180px_160px_180px_auto]" @submit.prevent="handleLoadPath">
           <div class="grid gap-2">
             <Label for="member-a">成员 A ID</Label>
-            <Input id="member-a" v-model.number="memberA" min="1" required type="number" />
+            <Input id="member-a" v-model.number="memberA" min="1" required type="number" :placeholder="memberIdPlaceholder" />
+            <p class="text-xs text-muted-foreground">{{ memberIdHint }}</p>
           </div>
           <div class="grid gap-2">
             <Label for="member-b">成员 B ID</Label>
-            <Input id="member-b" v-model.number="memberB" min="1" required type="number" />
+            <Input id="member-b" v-model.number="memberB" min="1" required type="number" :placeholder="memberIdPlaceholder" />
+            <p class="text-xs text-muted-foreground">{{ memberIdHint }}</p>
           </div>
           <div class="grid gap-2">
             <Label for="max-depth">最大跳数</Label>
@@ -96,6 +98,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
 import { fetchKinshipPath, type KinshipPathEdge, type KinshipPathResponse } from "@/api/kinship";
+import { fetchMemberIdRange, type MemberIdRangeResponse } from "@/api/member";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -113,9 +116,24 @@ const memberB = ref(Number(route.query.memberB ?? 0) || 0);
 const maxDepth = ref(Number(route.query.maxDepth ?? 12) || 12);
 const includeEndedMarriages = ref(route.query.includeEndedMarriages === "true");
 const data = ref<KinshipPathResponse | null>(null);
+const memberIdRange = ref<MemberIdRangeResponse | null>(null);
 const loading = ref(false);
 const feedback = ref("");
 const feedbackType = ref<"success" | "error">("success");
+
+const memberIdPlaceholder = computed(() => {
+  if (memberIdRange.value?.min_member_id && memberIdRange.value.max_member_id) {
+    return `${memberIdRange.value.min_member_id} - ${memberIdRange.value.max_member_id}`;
+  }
+  return "请输入成员 ID";
+});
+
+const memberIdHint = computed(() => {
+  if (!memberIdRange.value || memberIdRange.value.total === 0) {
+    return "当前族谱暂无成员编号范围。";
+  }
+  return `当前族谱共有 ${memberIdRange.value.total} 名成员，成员 ID 范围为 ${memberIdRange.value.min_member_id} - ${memberIdRange.value.max_member_id}。`;
+});
 
 function genderLabel(gender: string) {
   if (gender === "male") {
@@ -173,7 +191,17 @@ async function handleLoadPath() {
   }
 }
 
+async function loadMemberIdRange() {
+  try {
+    const response = await fetchMemberIdRange(treeId.value);
+    memberIdRange.value = response.data;
+  } catch {
+    memberIdRange.value = null;
+  }
+}
+
 onMounted(async () => {
+  await loadMemberIdRange();
   if (memberA.value > 0 && memberB.value > 0) {
     await handleLoadPath();
   }

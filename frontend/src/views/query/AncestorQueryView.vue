@@ -19,7 +19,8 @@
         <form class="grid gap-4 md:grid-cols-[220px_180px_auto]" @submit.prevent="handleLoadAncestors">
           <div class="grid gap-2">
             <Label for="member-id">成员 ID</Label>
-            <Input id="member-id" v-model.number="memberId" min="1" required type="number" />
+            <Input id="member-id" v-model.number="memberId" min="1" required type="number" :placeholder="memberIdPlaceholder" />
+            <p class="text-xs text-muted-foreground">{{ memberIdHint }}</p>
           </div>
           <div class="grid gap-2">
             <Label for="max-depth">最大深度</Label>
@@ -85,6 +86,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
 import { fetchAncestors, type AncestorResponse } from "@/api/kinship";
+import { fetchMemberIdRange, type MemberIdRangeResponse } from "@/api/member";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,9 +101,24 @@ const treeId = computed(() => Number(route.params.treeId));
 const memberId = ref(Number(route.query.memberId ?? 0) || 0);
 const maxDepth = ref(Number(route.query.maxDepth ?? 30) || 30);
 const data = ref<AncestorResponse | null>(null);
+const memberIdRange = ref<MemberIdRangeResponse | null>(null);
 const loading = ref(false);
 const feedback = ref("");
 const feedbackType = ref<"success" | "error">("success");
+
+const memberIdPlaceholder = computed(() => {
+  if (memberIdRange.value?.min_member_id && memberIdRange.value.max_member_id) {
+    return `${memberIdRange.value.min_member_id} - ${memberIdRange.value.max_member_id}`;
+  }
+  return "请输入成员 ID";
+});
+
+const memberIdHint = computed(() => {
+  if (!memberIdRange.value || memberIdRange.value.total === 0) {
+    return "当前族谱暂无成员编号范围。";
+  }
+  return `当前族谱共有 ${memberIdRange.value.total} 名成员，成员 ID 范围为 ${memberIdRange.value.min_member_id} - ${memberIdRange.value.max_member_id}。`;
+});
 
 function roleLabel(role: string) {
   return role === "father" ? "父系祖先" : "母系祖先";
@@ -137,7 +154,17 @@ async function handleLoadAncestors() {
   }
 }
 
+async function loadMemberIdRange() {
+  try {
+    const response = await fetchMemberIdRange(treeId.value);
+    memberIdRange.value = response.data;
+  } catch {
+    memberIdRange.value = null;
+  }
+}
+
 onMounted(async () => {
+  await loadMemberIdRange();
   if (memberId.value > 0) {
     await handleLoadAncestors();
   }
