@@ -22,6 +22,14 @@ IMPORT_ORDER = [
 ]
 
 
+def _normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgresql+asyncpg://"):
+        return database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    if database_url.startswith("postgresql+psycopg://"):
+        return database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    return database_url
+
+
 def _table_columns(csv_path: Path) -> list[str]:
     with csv_path.open("r", encoding="utf-8") as handle:
         reader = csv.reader(handle)
@@ -38,18 +46,27 @@ def _copy_table(connection: psycopg.Connection, csv_path: Path, table_name: str)
                     copy.write(chunk)
 
 
+def _table_exists(connection: psycopg.Connection, table_name: str) -> bool:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT to_regclass(%s)", (table_name,))
+        return cursor.fetchone()[0] is not None
+
+
 def _delete_stage7_rows(connection: psycopg.Connection) -> None:
     statements = [
-        "DELETE FROM marriage WHERE tree_id BETWEEN 7001 AND 7010",
-        "DELETE FROM parent_child WHERE tree_id BETWEEN 7001 AND 7010",
-        "DELETE FROM member_provenance WHERE tree_id BETWEEN 7001 AND 7010",
-        "DELETE FROM member WHERE tree_id BETWEEN 7001 AND 7010",
-        "DELETE FROM tree_collaborator WHERE tree_id BETWEEN 7001 AND 7010",
-        "DELETE FROM family_tree WHERE tree_id BETWEEN 7001 AND 7010",
-        "DELETE FROM user_account WHERE user_id IN (7000001, 7000002, 7000003)",
+        ("marriage", "DELETE FROM marriage WHERE tree_id BETWEEN 7001 AND 7010"),
+        ("parent_child", "DELETE FROM parent_child WHERE tree_id BETWEEN 7001 AND 7010"),
+        ("member_provenance", "DELETE FROM member_provenance WHERE tree_id BETWEEN 7001 AND 7010"),
+        ("member", "DELETE FROM member WHERE tree_id BETWEEN 7001 AND 7010"),
+        ("tree_collaborator", "DELETE FROM tree_collaborator WHERE tree_id BETWEEN 7001 AND 7010"),
+        ("family_tree", "DELETE FROM family_tree WHERE tree_id BETWEEN 7001 AND 7010"),
+        ("user_account", "DELETE FROM user_account WHERE user_id IN (7000001, 7000002, 7000003)"),
     ]
     with connection.cursor() as cursor:
-        for statement in statements:
+        for table_name, statement in statements:
+            if not _table_exists(connection, table_name):
+                print(f"Skipping cleanup for missing table: {table_name}")
+                continue
             cursor.execute(statement)
     connection.commit()
 
@@ -68,6 +85,12 @@ def _clear_redis_cache(redis_url: str | None) -> None:
         print(f"Could not clear Redis cache; continuing. error={exc}")
 
 
+def _set_replication_role(connection: psycopg.Connection, role: str) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(f"SET session_replication_role = {role}")
+    connection.commit()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Reimport Stage7 generated CSV files into PostgreSQL.")
     parser.add_argument("--input-dir", type=Path, default=GENERATED_DIR)
@@ -79,17 +102,36 @@ def main() -> None:
     if not args.database_url:
         raise SystemExit("DATABASE_URL is required via --database-url or environment variable.")
 
-    with psycopg.connect(args.database_url) as connection:
+    normalized_database_url = _normalize_database_url(args.database_url)
+
+    with psycopg.connect(normalized_database_url) as connection:
         print("Deleting existing Stage7 rows...")
         _delete_stage7_rows(connection)
 
-        for table_name in IMPORT_ORDER:
-            csv_path = args.input_dir / f"{table_name}.csv"
-            if not csv_path.exists():
-                raise FileNotFoundError(f"Missing CSV file for import: {csv_path}")
-            _copy_table(connection, csv_path, table_name)
-            connection.commit()
-            print(f"Imported {table_name} from {csv_path}")
+        replication_role_enabled = False
+        try:
+            try:
+                _set_replication_role(connection, "replica")
+                replication_role_enabled = True
+                print("Enabled session_replication_role=replica for faster Stage7 import.")
+            except Exception:
+                connection.rollback()
+                print("Could not enable session_replication_role=replica; continuing with normal constraints.")
+
+            for table_name in IMPORT_ORDER:
+                if not _table_exists(connection, table_name):
+                    print(f"Skipping import for missing table: {table_name}")
+                    continue
+                csv_path = args.input_dir / f"{table_name}.csv"
+                if not csv_path.exists():
+                    raise FileNotFoundError(f"Missing CSV file for import: {csv_path}")
+                _copy_table(connection, csv_path, table_name)
+                connection.commit()
+                print(f"Imported {table_name} from {csv_path}")
+        finally:
+            if replication_role_enabled:
+                _set_replication_role(connection, "origin")
+                print("Restored session_replication_role=origin.")
 
     if not args.skip_redis_clear:
         _clear_redis_cache(args.redis_url)
