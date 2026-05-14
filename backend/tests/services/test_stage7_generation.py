@@ -56,8 +56,8 @@ def test_stage7_generator_can_build_small_dataset_with_life_rules():
 
     assert summary["family_tree"] == 3
     assert summary["member"] == 390
-    assert summary["user_account"] == 2
-    assert summary["tree_collaborator"] == 3
+    assert summary["user_account"] == 3
+    assert summary["tree_collaborator"] == 6
     assert summary["parent_child"] > 0
     assert summary["marriage"] > 0
     assert summary["member_provenance"] == summary["member"]

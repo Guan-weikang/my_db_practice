@@ -15,10 +15,12 @@ GENERATED_DIR = ROOT_DIR / "data" / "stage7" / "generated"
 
 DEFAULT_CREATOR_USER_ID = 7000001
 DEFAULT_READER_USER_ID = 7000002
+DEFAULT_COLLABORATOR_USER_ID = 7000003
 DEFAULT_TREE_ID_START = 7001
 DEFAULT_MEMBER_ID_START = 1000001
 DEFAULT_RANDOM_SEED = 20260513
 CURRENT_YEAR = 2026
+PASSWORD123_HASH = "$argon2id$v=19$m=65536,t=3,p=4$TvtS/znYf4UUnty9hmDdPQ$KYQ+1IAxobgmLJvo46lOfQR1kpp9HRkuUlClDLA9tRU"
 
 MALE_GIVEN_PARTS = ["伟", "强", "明", "国", "文", "成", "德", "世", "承", "宗", "景", "安"]
 FEMALE_GIVEN_PARTS = ["丽", "芳", "敏", "兰", "梅", "华", "玉", "宁", "安", "慧", "清", "雅"]
@@ -171,7 +173,7 @@ def _make_user_rows() -> list[dict[str, Any]]:
         {
             "user_id": DEFAULT_CREATOR_USER_ID,
             "username": "stage7_importer",
-            "password_hash": "stage7-import-only",
+            "password_hash": PASSWORD123_HASH,
             "display_name": "Stage7 Importer",
             "email": "stage7_importer@example.com",
             "status": "active",
@@ -179,9 +181,17 @@ def _make_user_rows() -> list[dict[str, Any]]:
         {
             "user_id": DEFAULT_READER_USER_ID,
             "username": "stage7_reader",
-            "password_hash": "stage7-read-only",
+            "password_hash": PASSWORD123_HASH,
             "display_name": "Stage7 Reader",
             "email": "stage7_reader@example.com",
+            "status": "active",
+        },
+        {
+            "user_id": DEFAULT_COLLABORATOR_USER_ID,
+            "username": "stage7_collaborator",
+            "password_hash": PASSWORD123_HASH,
+            "display_name": "Stage7 Collaborator",
+            "email": "stage7_collaborator@example.com",
             "status": "active",
         },
     ]
@@ -227,6 +237,15 @@ def generate_dataset(
                 "tree_id": tree_id,
                 "user_id": DEFAULT_READER_USER_ID,
                 "access_role": "reader",
+                "invited_by": DEFAULT_CREATOR_USER_ID,
+                "status": "active",
+            }
+        )
+        dataset["tree_collaborator"].append(
+            {
+                "tree_id": tree_id,
+                "user_id": DEFAULT_COLLABORATOR_USER_ID,
+                "access_role": "collaborator",
                 "invited_by": DEFAULT_CREATOR_USER_ID,
                 "status": "active",
             }
