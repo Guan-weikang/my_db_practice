@@ -23,6 +23,15 @@ class MemberService:
         self.relationship_repository = RelationshipRepository(session)
 
     async def list_by_tree(self, *, tree_id: int, page: int, page_size: int) -> PaginatedMemberResponse:
+        return await get_or_set_model(
+            self.cache,
+            key=f"tree:{tree_id}:members:list:page:{page}:size:{page_size}",
+            ttl_seconds=180,
+            model_type=PaginatedMemberResponse,
+            loader=lambda: self._list_by_tree_uncached(tree_id=tree_id, page=page, page_size=page_size),
+        )
+
+    async def _list_by_tree_uncached(self, *, tree_id: int, page: int, page_size: int) -> PaginatedMemberResponse:
         offset = (page - 1) * page_size
         items = await self.member_repository.list_by_tree_id(tree_id, offset=offset, limit=page_size)
         total = await self.member_repository.count_by_tree_id(tree_id)

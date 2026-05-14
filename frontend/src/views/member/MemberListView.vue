@@ -174,13 +174,32 @@
         <p class="text-sm text-muted-foreground">
           第 {{ page }} / {{ totalPages }} 页
         </p>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <Button variant="outline" :disabled="page <= 1 || memberStore.loadingList" @click="goPage(1)">
+            首页
+          </Button>
           <Button variant="outline" :disabled="page <= 1 || memberStore.loadingList" @click="goPage(page - 1)">
             上一页
           </Button>
           <Button variant="outline" :disabled="page >= totalPages || memberStore.loadingList" @click="goPage(page + 1)">
             下一页
           </Button>
+          <Button variant="outline" :disabled="page >= totalPages || memberStore.loadingList" @click="goPage(totalPages)">
+            末页
+          </Button>
+          <form class="flex items-center gap-2" @submit.prevent="jumpToPage">
+            <Input
+              v-model.number="jumpPage"
+              class="w-24"
+              min="1"
+              :max="totalPages"
+              type="number"
+              aria-label="跳转页号"
+            />
+            <Button variant="outline" :disabled="memberStore.loadingList" type="submit">
+              跳转
+            </Button>
+          </form>
         </div>
       </CardFooter>
     </Card>
@@ -218,6 +237,7 @@ const { canEdit } = useFamilyTreePermission();
 const treeId = computed(() => Number(route.params.treeId));
 const page = ref(1);
 const pageSize = ref(20);
+const jumpPage = ref(1);
 const submittingCreate = ref(false);
 const createOpen = ref(false);
 const feedback = ref("");
@@ -258,6 +278,7 @@ async function loadPage() {
   try {
     await familyTreeStore.loadFamilyTreeDetail(treeId.value);
     await memberStore.loadMembers(treeId.value, page.value, pageSize.value);
+    jumpPage.value = page.value;
   } catch (error) {
     feedbackType.value = "error";
     feedback.value = errorMessage(error, "成员列表加载失败，请稍后重试。");
@@ -271,12 +292,18 @@ async function refreshList() {
 async function goPage(targetPage: number) {
   page.value = Math.min(Math.max(targetPage, 1), totalPages.value);
   await memberStore.loadMembers(treeId.value, page.value, pageSize.value);
+  jumpPage.value = page.value;
 }
 
 async function changePageSize(value: string | number | null | undefined) {
   pageSize.value = Number(value) || 20;
   page.value = 1;
   await memberStore.loadMembers(treeId.value, page.value, pageSize.value);
+  jumpPage.value = page.value;
+}
+
+async function jumpToPage() {
+  await goPage(Number(jumpPage.value) || 1);
 }
 
 async function handleCreate() {

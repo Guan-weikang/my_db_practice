@@ -27,10 +27,11 @@ async def list_members(
     tree_id: int,
     _: TreePermissionContext = Depends(require_tree_reader),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> PaginatedMemberResponse:
-    return await _member_service(session).list_by_tree(tree_id=tree_id, page=page, page_size=page_size)
+    return await _member_service(session, cache).list_by_tree(tree_id=tree_id, page=page, page_size=page_size)
 
 
 @router.get("/id-range", response_model=MemberIdRangeResponse)
