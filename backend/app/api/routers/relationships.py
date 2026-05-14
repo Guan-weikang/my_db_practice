@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Body, Depends
 
+from app.api.deps.auth import get_response_cache
 from app.api.deps.db import get_db_session
 from app.api.deps.permission import TreePermissionContext, require_tree_editor, require_tree_reader
+from app.core.cache import ResponseCache
 from app.schemas.common import MessageResponse
 from app.schemas.relationship import (
     ChildRelationItem,
@@ -21,8 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 router = APIRouter()
 
 
-def _relationship_service(session: AsyncSession) -> RelationshipService:
-    return RelationshipService(session)
+def _relationship_service(session: AsyncSession, cache: ResponseCache | None = None) -> RelationshipService:
+    return RelationshipService(session, cache)
 
 
 @router.post("/parent-child")
@@ -31,8 +33,9 @@ async def create_parent_child(
     payload: ParentChildCreateRequest,
     _: TreePermissionContext = Depends(require_tree_editor),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> ParentChildResponse:
-    return await _relationship_service(session).create_parent_child(tree_id=tree_id, payload=payload)
+    return await _relationship_service(session, cache).create_parent_child(tree_id=tree_id, payload=payload)
 
 
 @router.delete("/parent-child", response_model=MessageResponse)
@@ -41,8 +44,9 @@ async def delete_parent_child(
     payload: ParentChildDeleteRequest = Body(...),
     _: TreePermissionContext = Depends(require_tree_editor),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> MessageResponse:
-    await _relationship_service(session).delete_parent_child(tree_id=tree_id, payload=payload)
+    await _relationship_service(session, cache).delete_parent_child(tree_id=tree_id, payload=payload)
     return MessageResponse(message="Parent-child relation deleted")
 
 
@@ -52,8 +56,9 @@ async def create_marriage(
     payload: MarriageCreateRequest,
     _: TreePermissionContext = Depends(require_tree_editor),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> MarriageResponse:
-    return await _relationship_service(session).create_marriage(tree_id=tree_id, payload=payload)
+    return await _relationship_service(session, cache).create_marriage(tree_id=tree_id, payload=payload)
 
 
 @router.patch("/marriages")
@@ -62,8 +67,9 @@ async def update_marriage(
     payload: MarriageUpdateRequest,
     _: TreePermissionContext = Depends(require_tree_editor),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> MarriageResponse:
-    return await _relationship_service(session).update_marriage(tree_id=tree_id, payload=payload)
+    return await _relationship_service(session, cache).update_marriage(tree_id=tree_id, payload=payload)
 
 
 @router.delete("/marriages", response_model=MessageResponse)
@@ -72,8 +78,9 @@ async def delete_marriage(
     payload: MarriageDeleteRequest = Body(...),
     _: TreePermissionContext = Depends(require_tree_editor),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> MessageResponse:
-    await _relationship_service(session).delete_marriage(tree_id=tree_id, payload=payload)
+    await _relationship_service(session, cache).delete_marriage(tree_id=tree_id, payload=payload)
     return MessageResponse(message="Marriage relation deleted")
 
 
@@ -105,4 +112,3 @@ async def member_spouses(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[SpouseRelationItem]:
     return await _relationship_service(session).list_spouses(tree_id=tree_id, member_id=member_id)
-

@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Body, Depends, Query, status
 
+from app.api.deps.auth import get_response_cache
 from app.api.deps.db import get_db_session
 from app.api.deps.permission import TreePermissionContext, require_tree_editor, require_tree_reader
+from app.core.cache import ResponseCache
 from app.schemas.common import MessageResponse
 from app.schemas.member import (
     MemberCreateRequest,
@@ -16,8 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 router = APIRouter()
 
 
-def _member_service(session: AsyncSession) -> MemberService:
-    return MemberService(session)
+def _member_service(session: AsyncSession, cache: ResponseCache | None = None) -> MemberService:
+    return MemberService(session, cache)
 
 
 @router.get("", response_model=PaginatedMemberResponse)
@@ -36,8 +38,9 @@ async def get_member_id_range(
     tree_id: int,
     _: TreePermissionContext = Depends(require_tree_reader),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> MemberIdRangeResponse:
-    return await _member_service(session).get_id_range(tree_id=tree_id)
+    return await _member_service(session, cache).get_id_range(tree_id=tree_id)
 
 
 @router.post("", response_model=MemberDetailResponse, status_code=status.HTTP_201_CREATED)
@@ -46,8 +49,9 @@ async def create_member(
     payload: MemberCreateRequest,
     _: TreePermissionContext = Depends(require_tree_editor),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> MemberDetailResponse:
-    return await _member_service(session).create(tree_id=tree_id, payload=payload)
+    return await _member_service(session, cache).create(tree_id=tree_id, payload=payload)
 
 
 @router.get("/{member_id}", response_model=MemberDetailResponse)
@@ -67,8 +71,9 @@ async def update_member(
     payload: MemberUpdateRequest | None = Body(default=None),
     _: TreePermissionContext = Depends(require_tree_editor),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> MemberDetailResponse:
-    return await _member_service(session).update(tree_id=tree_id, member_id=member_id, payload=payload)
+    return await _member_service(session, cache).update(tree_id=tree_id, member_id=member_id, payload=payload)
 
 
 @router.delete("/{member_id}", response_model=MessageResponse)
@@ -77,6 +82,7 @@ async def delete_member(
     member_id: int,
     _: TreePermissionContext = Depends(require_tree_editor),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> MessageResponse:
-    await _member_service(session).delete(tree_id=tree_id, member_id=member_id)
+    await _member_service(session, cache).delete(tree_id=tree_id, member_id=member_id)
     return MessageResponse(message=f"Member {member_id} deleted from family tree {tree_id}")

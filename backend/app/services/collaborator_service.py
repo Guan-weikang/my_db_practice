@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import ResponseCache
 from app.core.exceptions import conflict, not_found
 from app.repositories.collaborator_repository import CollaboratorRepository
 from app.repositories.family_tree_repository import FamilyTreeRepository
@@ -10,11 +11,13 @@ from app.schemas.collaborator import (
     CollaboratorUpdateRequest,
     PaginatedCollaboratorResponse,
 )
+from app.services.cache_helpers import invalidate_tree_cache
 
 
 class CollaboratorService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, cache: ResponseCache | None = None) -> None:
         self.session = session
+        self.cache = cache
         self.collaborator_repository = CollaboratorRepository(session)
         self.family_tree_repository = FamilyTreeRepository(session)
         self.user_repository = UserRepository(session)
@@ -71,6 +74,7 @@ class CollaboratorService:
             )
 
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree_id)
         return await self._build_response(tree_id=tree_id, user_id=collaborator.user_id)
 
     async def update(
@@ -96,6 +100,7 @@ class CollaboratorService:
             },
         )
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree_id)
         return await self._build_response(tree_id=tree_id, user_id=user_id)
 
     async def revoke(self, *, tree_id: int, user_id: int) -> None:
@@ -114,6 +119,7 @@ class CollaboratorService:
             },
         )
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree_id)
 
     async def _build_response(self, *, tree_id: int, user_id: int) -> CollaboratorResponse:
         items = await self.collaborator_repository.list_for_tree(tree_id, offset=0, limit=1000)

@@ -1,6 +1,7 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import ResponseCache
 from app.core.exceptions import bad_request, not_found
 from app.queries.ancestor_queries import ANCESTOR_QUERY
 from app.queries.kinship_queries import (
@@ -11,14 +12,25 @@ from app.queries.kinship_queries import (
 from app.repositories.member_repository import MemberRepository
 from app.schemas.kinship import AncestorNode, AncestorResponse, KinshipPathEdge, KinshipPathResponse
 from app.schemas.search import MemberGraphNode
+from app.services.cache_helpers import get_or_set_model
 
 
 class KinshipService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, cache: ResponseCache | None = None) -> None:
         self.session = session
+        self.cache = cache
         self.member_repository = MemberRepository(session)
 
     async def get_ancestors(self, *, tree_id: int, member_id: int, max_depth: int) -> AncestorResponse:
+        return await get_or_set_model(
+            self.cache,
+            key=f"tree:{tree_id}:ancestors:member:{member_id}:depth:{max_depth}",
+            ttl_seconds=300,
+            model_type=AncestorResponse,
+            loader=lambda: self._get_ancestors_uncached(tree_id=tree_id, member_id=member_id, max_depth=max_depth),
+        )
+
+    async def _get_ancestors_uncached(self, *, tree_id: int, member_id: int, max_depth: int) -> AncestorResponse:
         self._validate_ancestor_depth(max_depth)
         start_member = await self._get_member_or_raise(tree_id=tree_id, member_id=member_id)
         result = await self.session.execute(
@@ -55,6 +67,32 @@ class KinshipService:
         )
 
     async def get_path(
+        self,
+        *,
+        tree_id: int,
+        member_a: int,
+        member_b: int,
+        max_depth: int,
+        include_ended_marriages: bool,
+    ) -> KinshipPathResponse:
+        return await get_or_set_model(
+            self.cache,
+            key=(
+                f"tree:{tree_id}:kinship:path:a:{member_a}:b:{member_b}:"
+                f"depth:{max_depth}:ended:{int(include_ended_marriages)}"
+            ),
+            ttl_seconds=300,
+            model_type=KinshipPathResponse,
+            loader=lambda: self._get_path_uncached(
+                tree_id=tree_id,
+                member_a=member_a,
+                member_b=member_b,
+                max_depth=max_depth,
+                include_ended_marriages=include_ended_marriages,
+            ),
+        )
+
+    async def _get_path_uncached(
         self,
         *,
         tree_id: int,

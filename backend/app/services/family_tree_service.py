@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import ResponseCache
 from app.core.exceptions import bad_request, conflict, not_found
 from app.repositories.collaborator_repository import CollaboratorRepository
 from app.repositories.family_tree_repository import FamilyTreeRepository
@@ -12,16 +13,33 @@ from app.schemas.family_tree import (
     FamilyTreeUpdateRequest,
     PaginatedFamilyTreeResponse,
 )
+from app.services.cache_helpers import get_or_set_model, invalidate_tree_cache
 
 
 class FamilyTreeService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, cache: ResponseCache | None = None) -> None:
         self.session = session
+        self.cache = cache
         self.family_tree_repository = FamilyTreeRepository(session)
         self.collaborator_repository = CollaboratorRepository(session)
         self.member_repository = MemberRepository(session)
 
     async def list_accessible_for_user(
+        self,
+        *,
+        user_id: int,
+        page: int,
+        page_size: int,
+    ) -> PaginatedFamilyTreeResponse:
+        return await get_or_set_model(
+            self.cache,
+            key=f"family-trees:user:{user_id}:page:{page}:size:{page_size}",
+            ttl_seconds=120,
+            model_type=PaginatedFamilyTreeResponse,
+            loader=lambda: self._list_accessible_for_user_uncached(user_id=user_id, page=page, page_size=page_size),
+        )
+
+    async def _list_accessible_for_user_uncached(
         self,
         *,
         user_id: int,
@@ -43,6 +61,15 @@ class FamilyTreeService:
         )
 
     async def get_detail(self, *, tree_id: int, access_role: str) -> FamilyTreeDetailResponse:
+        return await get_or_set_model(
+            self.cache,
+            key=f"tree:{tree_id}:detail:{access_role}",
+            ttl_seconds=300,
+            model_type=FamilyTreeDetailResponse,
+            loader=lambda: self._get_detail_uncached(tree_id=tree_id, access_role=access_role),
+        )
+
+    async def _get_detail_uncached(self, *, tree_id: int, access_role: str) -> FamilyTreeDetailResponse:
         tree = await self.family_tree_repository.get_by_id(tree_id)
         if tree is None:
             raise not_found("Family tree not found")
@@ -61,6 +88,7 @@ class FamilyTreeService:
             description=self._normalize_optional_text(payload.description),
         )
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree.tree_id)
         await self.session.refresh(tree)
         return FamilyTreeResponse.model_validate(tree)
 
@@ -84,6 +112,7 @@ class FamilyTreeService:
 
         tree = await self.family_tree_repository.update(tree, update_values)
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree_id)
         await self.session.refresh(tree)
         return FamilyTreeDetailResponse(
             **FamilyTreeResponse.model_validate(tree).model_dump(),
@@ -100,6 +129,7 @@ class FamilyTreeService:
         await self.collaborator_repository.delete_by_tree_id(tree_id)
         await self.family_tree_repository.delete(tree)
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree_id)
 
     def _validate_create_payload(self, payload: FamilyTreeCreateRequest) -> None:
         if not payload.tree_name.strip():

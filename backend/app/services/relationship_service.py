@@ -1,6 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import ResponseCache
 from app.core.exceptions import bad_request, conflict, not_found
 from app.repositories.member_repository import MemberRepository
 from app.repositories.relationship_repository import RelationshipRepository
@@ -16,11 +17,13 @@ from app.schemas.relationship import (
     ParentRelationItem,
     SpouseRelationItem,
 )
+from app.services.cache_helpers import invalidate_tree_cache
 
 
 class RelationshipService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, cache: ResponseCache | None = None) -> None:
         self.session = session
+        self.cache = cache
         self.member_repository = MemberRepository(session)
         self.relationship_repository = RelationshipRepository(session)
 
@@ -56,6 +59,7 @@ class RelationshipService:
                 parent_role=payload.parent_role,
             )
             await self.session.commit()
+            await invalidate_tree_cache(self.cache, tree_id)
         except IntegrityError as exc:
             await self.session.rollback()
             raise conflict("Parent-child relation could not be created") from exc
@@ -78,6 +82,7 @@ class RelationshipService:
             raise not_found("Parent-child relation not found")
         await self.relationship_repository.delete_parent_child(relation)
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree_id)
 
     async def list_parents(self, *, tree_id: int, member_id: int) -> list[ParentRelationItem]:
         await self._get_member_or_raise(tree_id=tree_id, member_id=member_id)
@@ -116,6 +121,7 @@ class RelationshipService:
                 status=payload.status,
             )
             await self.session.commit()
+            await invalidate_tree_cache(self.cache, tree_id)
         except IntegrityError as exc:
             await self.session.rollback()
             raise conflict("Marriage relation could not be created") from exc
@@ -156,6 +162,7 @@ class RelationshipService:
                 status=status,
             )
             await self.session.commit()
+            await invalidate_tree_cache(self.cache, tree_id)
         except IntegrityError as exc:
             await self.session.rollback()
             raise conflict("Marriage relation could not be updated") from exc
@@ -173,6 +180,7 @@ class RelationshipService:
             raise not_found("Marriage relation not found")
         await self.relationship_repository.delete_marriage(marriage)
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree_id)
 
     async def list_spouses(self, *, tree_id: int, member_id: int) -> list[SpouseRelationItem]:
         await self._get_member_or_raise(tree_id=tree_id, member_id=member_id)

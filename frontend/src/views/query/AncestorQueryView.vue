@@ -55,10 +55,15 @@
         <CardDescription>起点成员 #{{ data.start_member.member_id }}，最大深度 {{ data.max_depth }}。</CardDescription>
       </CardHeader>
       <CardContent>
+        <Alert v-if="isGraphLimited || duplicateGraphNodeCount > 0" class="mb-4">
+          <AlertTitle>图谱已聚焦展示</AlertTitle>
+          <AlertDescription>{{ graphFocusMessage }}</AlertDescription>
+        </Alert>
         <div v-if="data.nodes.length === 0" class="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
           当前成员没有可展示的祖先记录。
         </div>
-        <div v-else class="grid gap-3">
+        <div v-else class="grid gap-5">
+          <FamilyGraphCanvas :tree-id="treeId" :nodes="graphNodes" :edges="graphEdges" />
           <RouterLink
             v-for="node in data.nodes"
             :key="`${node.path_member_ids.join('-')}-${node.member_id}`"
@@ -87,6 +92,7 @@ import { useRoute } from "vue-router";
 
 import { fetchAncestors, type AncestorResponse } from "@/api/kinship";
 import { fetchMemberIdRange, type MemberIdRangeResponse } from "@/api/member";
+import FamilyGraphCanvas, { type GraphEdge, type GraphNode } from "@/components/FamilyGraphCanvas.vue";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,6 +111,9 @@ const memberIdRange = ref<MemberIdRangeResponse | null>(null);
 const loading = ref(false);
 const feedback = ref("");
 const feedbackType = ref<"success" | "error">("success");
+const graphDepthLimit = 8;
+const layerGapX = 240;
+const layerGapY = 150;
 
 const memberIdPlaceholder = computed(() => {
   if (memberIdRange.value?.min_member_id && memberIdRange.value.max_member_id) {
@@ -118,6 +127,104 @@ const memberIdHint = computed(() => {
     return "当前族谱暂无成员编号范围。";
   }
   return `当前族谱共有 ${memberIdRange.value.total} 名成员，成员 ID 范围为 ${memberIdRange.value.min_member_id} - ${memberIdRange.value.max_member_id}。`;
+});
+
+const graphNodes = computed<GraphNode[]>(() => {
+  if (!data.value) {
+    return [];
+  }
+
+  const layers = new Map<number, { id: number; name: string; meta: string }[]>();
+  const addedIds = new Set<number>();
+  layers.set(0, [{
+    id: data.value.start_member.member_id,
+    name: data.value.start_member.name,
+    meta: "起点成员"
+  }]);
+  addedIds.add(data.value.start_member.member_id);
+
+  for (const node of data.value.nodes) {
+    if (node.depth > graphDepthLimit || addedIds.has(node.member_id)) {
+      continue;
+    }
+    addedIds.add(node.member_id);
+    layers.set(node.depth, [
+      ...(layers.get(node.depth) ?? []),
+      {
+        id: node.member_id,
+        name: node.name,
+        meta: `${roleLabel(node.parent_role)} · 深度 ${node.depth}`
+      }
+    ]);
+  }
+
+  const maxLayerSize = Math.max(...[...layers.values()].map((items) => items.length), 1);
+  const canvasCenter = ((maxLayerSize - 1) * layerGapX) / 2;
+  const nodes: GraphNode[] = [];
+  for (const [depth, items] of [...layers.entries()].sort(([left], [right]) => left - right)) {
+    const layerWidth = (items.length - 1) * layerGapX;
+    const startX = canvasCenter - layerWidth / 2;
+    items
+      .sort((left, right) => left.id - right.id)
+      .forEach((item, index) => {
+        nodes.push({
+          ...item,
+          x: startX + index * layerGapX,
+          y: 40 + depth * layerGapY
+        });
+      });
+  }
+
+  return nodes;
+});
+
+const graphNodeIds = computed(() => new Set(graphNodes.value.map((node) => node.id)));
+
+const graphEdges = computed<GraphEdge[]>(() => {
+  if (!data.value) {
+    return [];
+  }
+  const seenEdges = new Set<string>();
+  return data.value.nodes
+    .filter((node) => graphNodeIds.value.has(node.child_member_id) && graphNodeIds.value.has(node.member_id))
+    .flatMap((node) => {
+      const key = `${node.child_member_id}-${node.member_id}`;
+      if (seenEdges.has(key)) {
+        return [];
+      }
+      seenEdges.add(key);
+      return [{
+        from: node.child_member_id,
+        to: node.member_id,
+        label: roleLabel(node.parent_role)
+      }];
+    });
+});
+
+const isGraphLimited = computed(() => {
+  if (!data.value) {
+    return false;
+  }
+  return data.value.nodes.some((node) => node.depth > graphDepthLimit);
+});
+
+const duplicateGraphNodeCount = computed(() => {
+  if (!data.value) {
+    return 0;
+  }
+  const visibleNodes = data.value.nodes.filter((node) => node.depth <= graphDepthLimit);
+  return visibleNodes.length + 1 - graphNodes.value.length;
+});
+
+const graphFocusMessage = computed(() => {
+  const messages: string[] = [];
+  if (isGraphLimited.value) {
+    messages.push(`图谱先展示前 ${graphDepthLimit} 层`);
+  }
+  if (duplicateGraphNodeCount.value > 0) {
+    messages.push(`已合并 ${duplicateGraphNodeCount.value} 个重复成员节点`);
+  }
+  return `${messages.join("，")}；完整祖先结果仍在下方列表中。`;
 });
 
 function roleLabel(role: string) {

@@ -1,16 +1,18 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps.auth import get_response_cache
 from app.api.deps.db import get_db_session
 from app.api.deps.permission import TreePermissionContext, require_tree_reader
+from app.core.cache import ResponseCache
 from app.schemas.search import BranchTreeResponse, PaginatedSearchMemberResponse
 from app.services.search_service import SearchService
 
 router = APIRouter()
 
 
-def _search_service(session: AsyncSession) -> SearchService:
-    return SearchService(session)
+def _search_service(session: AsyncSession, cache: ResponseCache | None = None) -> SearchService:
+    return SearchService(session, cache)
 
 
 @router.get("/members", response_model=PaginatedSearchMemberResponse)
@@ -36,8 +38,9 @@ async def branch_tree(
     max_depth: int = Query(4, ge=1, le=10),
     _: TreePermissionContext = Depends(require_tree_reader),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> BranchTreeResponse:
-    return await _search_service(session).get_branch_tree(
+    return await _search_service(session, cache).get_branch_tree(
         tree_id=tree_id,
         root_member_id=root_member_id,
         max_depth=max_depth,

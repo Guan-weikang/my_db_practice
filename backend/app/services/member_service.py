@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import ResponseCache
 from app.core.exceptions import bad_request, not_found
 from app.repositories.member_repository import MemberRepository
 from app.repositories.relationship_repository import RelationshipRepository
@@ -11,11 +12,13 @@ from app.schemas.member import (
     MemberUpdateRequest,
     PaginatedMemberResponse,
 )
+from app.services.cache_helpers import get_or_set_model, invalidate_tree_cache
 
 
 class MemberService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, cache: ResponseCache | None = None) -> None:
         self.session = session
+        self.cache = cache
         self.member_repository = MemberRepository(session)
         self.relationship_repository = RelationshipRepository(session)
 
@@ -31,6 +34,15 @@ class MemberService:
         )
 
     async def get_id_range(self, *, tree_id: int) -> MemberIdRangeResponse:
+        return await get_or_set_model(
+            self.cache,
+            key=f"tree:{tree_id}:members:id-range",
+            ttl_seconds=600,
+            model_type=MemberIdRangeResponse,
+            loader=lambda: self._get_id_range_uncached(tree_id=tree_id),
+        )
+
+    async def _get_id_range_uncached(self, *, tree_id: int) -> MemberIdRangeResponse:
         min_member_id, max_member_id, total = await self.member_repository.get_member_id_range_by_tree_id(tree_id)
         return MemberIdRangeResponse(
             min_member_id=min_member_id,
@@ -46,6 +58,7 @@ class MemberService:
         values = self._build_create_values(payload)
         member = await self.member_repository.create(tree_id=tree_id, values=values)
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree_id)
         await self.session.refresh(member)
         return MemberDetailResponse.model_validate(member)
 
@@ -55,6 +68,7 @@ class MemberService:
         if values:
             member = await self.member_repository.update(member, values)
             await self.session.commit()
+            await invalidate_tree_cache(self.cache, tree_id)
             await self.session.refresh(member)
         return MemberDetailResponse.model_validate(member)
 
@@ -63,6 +77,7 @@ class MemberService:
         await self.relationship_repository.delete_relations_for_member(tree_id=tree_id, member_id=member.member_id)
         await self.member_repository.delete(member)
         await self.session.commit()
+        await invalidate_tree_cache(self.cache, tree_id)
 
     async def _get_member_or_raise(self, *, tree_id: int, member_id: int):
         member = await self.member_repository.get_by_tree_and_member_id(tree_id=tree_id, member_id=member_id)

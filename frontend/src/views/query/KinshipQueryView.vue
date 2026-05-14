@@ -68,7 +68,8 @@
         <div v-if="!data.exists" class="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
           两名成员之间暂无可展示路径。
         </div>
-        <div v-else class="grid gap-3">
+        <div v-else class="grid gap-5">
+          <FamilyGraphCanvas :tree-id="treeId" :nodes="graphNodes" :edges="graphEdges" />
           <div v-for="(node, index) in data.nodes" :key="node.member_id" class="grid gap-3">
             <RouterLink
               class="block rounded-md border bg-card p-4 transition hover:border-primary/50 hover:bg-accent/50"
@@ -99,6 +100,7 @@ import { useRoute } from "vue-router";
 
 import { fetchKinshipPath, type KinshipPathEdge, type KinshipPathResponse } from "@/api/kinship";
 import { fetchMemberIdRange, type MemberIdRangeResponse } from "@/api/member";
+import FamilyGraphCanvas, { type GraphEdge, type GraphNode } from "@/components/FamilyGraphCanvas.vue";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -133,6 +135,30 @@ const memberIdHint = computed(() => {
     return "当前族谱暂无成员编号范围。";
   }
   return `当前族谱共有 ${memberIdRange.value.total} 名成员，成员 ID 范围为 ${memberIdRange.value.min_member_id} - ${memberIdRange.value.max_member_id}。`;
+});
+
+const graphNodes = computed<GraphNode[]>(() => {
+  if (!data.value?.exists) {
+    return [];
+  }
+  return data.value.nodes.map((node, index) => ({
+    id: node.member_id,
+    name: node.name,
+    meta: `${node.generation_no ?? "未填写"} 代 · ${node.generation_name ?? "无字辈"}`,
+    x: index * 240,
+    y: 40
+  }));
+});
+
+const graphEdges = computed<GraphEdge[]>(() => {
+  if (!data.value?.exists) {
+    return [];
+  }
+  return data.value.edges.map((edge) => ({
+    from: edge.from_member_id,
+    to: edge.to_member_id,
+    label: edgeLabel(edge)
+  }));
 });
 
 function genderLabel(gender: string) {

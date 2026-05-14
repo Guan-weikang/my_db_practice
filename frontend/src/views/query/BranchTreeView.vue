@@ -55,10 +55,15 @@
         <CardDescription>根成员 #{{ tree.root_member.member_id }}，最大深度 {{ tree.max_depth }}。</CardDescription>
       </CardHeader>
       <CardContent>
+        <Alert v-if="isGraphLimited" class="mb-4">
+          <AlertTitle>图谱已聚焦展示</AlertTitle>
+          <AlertDescription>当前结果较大，图谱先展示前 {{ graphDepthLimit }} 层、最多 {{ graphNodeLimit }} 个节点；完整分支结果仍在下方列表中。</AlertDescription>
+        </Alert>
         <div v-if="tree.nodes.length === 0" class="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
           当前根成员没有可展示的分支节点。
         </div>
-        <div v-else class="grid gap-3">
+        <div v-else class="grid gap-5">
+          <FamilyGraphCanvas :tree-id="treeId" :nodes="graphNodes" :edges="graphEdges" />
           <RouterLink
             v-for="node in tree.nodes"
             :key="`${node.path_member_ids.join('-')}-${node.member_id}`"
@@ -87,6 +92,7 @@ import { useRoute } from "vue-router";
 
 import { fetchMemberIdRange, type MemberIdRangeResponse } from "@/api/member";
 import { fetchBranchTree, type BranchTreeResponse } from "@/api/search";
+import FamilyGraphCanvas, { type GraphEdge, type GraphNode } from "@/components/FamilyGraphCanvas.vue";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,6 +111,10 @@ const memberIdRange = ref<MemberIdRangeResponse | null>(null);
 const loading = ref(false);
 const feedback = ref("");
 const feedbackType = ref<"success" | "error">("success");
+const graphDepthLimit = 8;
+const graphNodeLimit = 200;
+const layerGapX = 240;
+const layerGapY = 150;
 
 const memberIdPlaceholder = computed(() => {
   if (memberIdRange.value?.min_member_id && memberIdRange.value.max_member_id) {
@@ -118,6 +128,70 @@ const memberIdHint = computed(() => {
     return "当前族谱暂无成员编号范围。";
   }
   return `当前族谱共有 ${memberIdRange.value.total} 名成员，成员 ID 范围为 ${memberIdRange.value.min_member_id} - ${memberIdRange.value.max_member_id}。`;
+});
+
+const graphNodes = computed<GraphNode[]>(() => {
+  if (!tree.value) {
+    return [];
+  }
+
+  const layers = new Map<number, { id: number; name: string; meta: string }[]>();
+  for (const node of tree.value.nodes) {
+    if (node.depth > graphDepthLimit) {
+      continue;
+    }
+    const currentCount = [...layers.values()].reduce((total, items) => total + items.length, 0);
+    if (currentCount >= graphNodeLimit) {
+      break;
+    }
+    layers.set(node.depth, [
+      ...(layers.get(node.depth) ?? []),
+      {
+        id: node.member_id,
+        name: node.name,
+        meta: `${node.generation_no ?? "未填写"} 代 · 深度 ${node.depth}`
+      }
+    ]);
+  }
+
+  const maxLayerSize = Math.max(...[...layers.values()].map((items) => items.length), 1);
+  const canvasCenter = ((maxLayerSize - 1) * layerGapX) / 2;
+  const nodes: GraphNode[] = [];
+  for (const [depth, items] of [...layers.entries()].sort(([left], [right]) => left - right)) {
+    const layerWidth = (items.length - 1) * layerGapX;
+    const startX = canvasCenter - layerWidth / 2;
+    items.forEach((item, index) => {
+      nodes.push({
+        ...item,
+        x: startX + index * layerGapX,
+        y: 40 + depth * layerGapY
+      });
+    });
+  }
+
+  return nodes;
+});
+
+const graphNodeIds = computed(() => new Set(graphNodes.value.map((node) => node.id)));
+
+const graphEdges = computed<GraphEdge[]>(() => {
+  if (!tree.value) {
+    return [];
+  }
+  return tree.value.nodes
+    .filter((node) => node.parent_member_id !== null && graphNodeIds.value.has(Number(node.parent_member_id)) && graphNodeIds.value.has(node.member_id))
+    .map((node) => ({
+      from: Number(node.parent_member_id),
+      to: node.member_id,
+      label: relationshipLabel(node.incoming_parent_role)
+    }));
+});
+
+const isGraphLimited = computed(() => {
+  if (!tree.value) {
+    return false;
+  }
+  return tree.value.nodes.some((node) => node.depth > graphDepthLimit) || tree.value.nodes.length > graphNodeLimit;
 });
 
 function relationshipLabel(role: string | null) {

@@ -1,6 +1,7 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import ResponseCache
 from app.core.exceptions import bad_request, not_found
 from app.queries.search_queries import BRANCH_TREE_QUERY, MEMBER_SEARCH_QUERY
 from app.repositories.member_repository import MemberRepository
@@ -11,11 +12,13 @@ from app.schemas.search import (
     PaginatedSearchMemberResponse,
     SearchMemberItem,
 )
+from app.services.cache_helpers import get_or_set_model
 
 
 class SearchService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, cache: ResponseCache | None = None) -> None:
         self.session = session
+        self.cache = cache
         self.member_repository = MemberRepository(session)
 
     async def search_members(
@@ -63,6 +66,19 @@ class SearchService:
         return PaginatedSearchMemberResponse(items=items, total=total, page=page, page_size=page_size)
 
     async def get_branch_tree(self, *, tree_id: int, root_member_id: int, max_depth: int) -> BranchTreeResponse:
+        return await get_or_set_model(
+            self.cache,
+            key=f"tree:{tree_id}:branch-tree:root:{root_member_id}:depth:{max_depth}",
+            ttl_seconds=300,
+            model_type=BranchTreeResponse,
+            loader=lambda: self._get_branch_tree_uncached(
+                tree_id=tree_id,
+                root_member_id=root_member_id,
+                max_depth=max_depth,
+            ),
+        )
+
+    async def _get_branch_tree_uncached(self, *, tree_id: int, root_member_id: int, max_depth: int) -> BranchTreeResponse:
         self._validate_branch_depth(max_depth)
         root_member = await self._get_member_or_raise(tree_id=tree_id, member_id=root_member_id)
         result = await self.session.execute(

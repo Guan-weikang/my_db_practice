@@ -1,16 +1,18 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps.auth import get_response_cache
 from app.api.deps.db import get_db_session
 from app.api.deps.permission import TreePermissionContext, require_tree_reader
+from app.core.cache import ResponseCache
 from app.schemas.kinship import AncestorResponse, KinshipPathResponse
 from app.services.kinship_service import KinshipService
 
 router = APIRouter()
 
 
-def _kinship_service(session: AsyncSession) -> KinshipService:
-    return KinshipService(session)
+def _kinship_service(session: AsyncSession, cache: ResponseCache | None = None) -> KinshipService:
+    return KinshipService(session, cache)
 
 
 @router.get("/ancestors/{member_id}", response_model=AncestorResponse)
@@ -20,8 +22,9 @@ async def ancestors(
     max_depth: int = Query(30, ge=1, le=100),
     _: TreePermissionContext = Depends(require_tree_reader),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> AncestorResponse:
-    return await _kinship_service(session).get_ancestors(
+    return await _kinship_service(session, cache).get_ancestors(
         tree_id=tree_id,
         member_id=member_id,
         max_depth=max_depth,
@@ -37,8 +40,9 @@ async def path(
     include_ended_marriages: bool = Query(False),
     _: TreePermissionContext = Depends(require_tree_reader),
     session: AsyncSession = Depends(get_db_session),
+    cache: ResponseCache = Depends(get_response_cache),
 ) -> KinshipPathResponse:
-    return await _kinship_service(session).get_path(
+    return await _kinship_service(session, cache).get_path(
         tree_id=tree_id,
         member_a=member_a,
         member_b=member_b,
