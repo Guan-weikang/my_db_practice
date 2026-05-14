@@ -4,22 +4,10 @@
       <div>
         <p class="text-sm font-medium text-primary">总览</p>
         <h1 class="mt-2 text-2xl font-semibold tracking-normal">族谱统计</h1>
-        <p class="mt-2 text-sm text-muted-foreground">选择一棵族谱，查看成员构成、代际寿命和重点成员清单。</p>
+        <p class="mt-2 text-sm text-muted-foreground">跟随右上角当前族谱，查看成员构成、代际寿命和重点成员清单。</p>
       </div>
 
       <div class="flex flex-col gap-2 sm:flex-row">
-        <Select :model-value="selectedTreeValue" :disabled="loadingTrees || trees.length === 0" @update:model-value="handleTreeSelect">
-          <SelectTrigger class="w-full sm:w-72">
-            <SelectValue placeholder="选择族谱" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem v-for="tree in trees" :key="tree.tree_id" :value="String(tree.tree_id)">
-                {{ tree.tree_name }} · {{ roleLabel(tree.access_role) }}
-              </SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
         <Button :disabled="loadingAny || !selectedTreeId" variant="outline" @click="reloadAnalytics">
           <RefreshCwIcon data-icon="inline-start" />
           {{ loadingAny ? "刷新中" : "刷新" }}
@@ -37,17 +25,10 @@
       <AlertDescription>{{ feedback }}</AlertDescription>
     </Alert>
 
-    <Card v-if="loadingTrees">
-      <CardContent class="grid gap-3 p-6">
-        <Skeleton class="h-5 w-48" />
-        <Skeleton class="h-24 w-full" />
-      </CardContent>
-    </Card>
-
-    <Card v-else-if="trees.length === 0">
+    <Card v-if="!selectedTreeId">
       <CardHeader>
-        <CardTitle>暂无族谱</CardTitle>
-        <CardDescription>当前账号还没有可查看的族谱。</CardDescription>
+        <CardTitle>请选择族谱</CardTitle>
+        <CardDescription>请先使用右上角的族谱切换选择要查看的族谱。</CardDescription>
       </CardHeader>
       <CardFooter>
         <Button as-child>
@@ -221,8 +202,7 @@
 <script setup lang="ts">
 import axios from "axios";
 import type { Component } from "vue";
-import { computed, defineComponent, h, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { computed, defineComponent, h, ref, watch } from "vue";
 import { RefreshCwIcon } from "lucide-vue-next";
 
 import {
@@ -235,14 +215,13 @@ import {
   type GenerationMaxAverageLifespanResponse,
   type OlderThan50UnmarriedMaleItem
 } from "@/api/analytics";
-import { fetchFamilyTrees, type FamilyTreeListItem } from "@/api/familyTree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAppStore } from "@/stores/app";
 
 type LoadState = {
   loading: boolean;
@@ -279,12 +258,8 @@ const DataState = defineComponent({
   }
 });
 
-const route = useRoute();
-const router = useRouter();
-
-const trees = ref<FamilyTreeListItem[]>([]);
-const loadingTrees = ref(false);
-const selectedTreeId = ref(0);
+const appStore = useAppStore();
+const selectedTreeId = computed(() => appStore.currentTreeId ?? 0);
 const feedback = ref("");
 const feedbackType = ref<"success" | "error">("success");
 
@@ -312,8 +287,6 @@ const loadingAny = computed(
     birthYearState.value.loading
 );
 
-const selectedTreeValue = computed(() => (selectedTreeId.value ? String(selectedTreeId.value) : undefined));
-
 const chartItems = computed(() => {
   const summary = dashboard.value?.summary;
   const total = summary?.total_members ?? 0;
@@ -330,16 +303,6 @@ const chartItems = computed(() => {
   }));
 });
 
-function roleLabel(role: string) {
-  if (role === "creator") {
-    return "创建者";
-  }
-  if (role === "collaborator") {
-    return "协作者";
-  }
-  return "只读";
-}
-
 function formatNumber(value: number | undefined) {
   return typeof value === "number" ? value.toLocaleString("zh-CN") : "0";
 }
@@ -349,45 +312,6 @@ function errorMessage(error: unknown, fallback: string) {
     return (error.response?.data as { message?: string } | undefined)?.message ?? fallback;
   }
   return fallback;
-}
-
-async function syncTreeQuery(treeId: number) {
-  await router.replace({
-    query: {
-      ...route.query,
-      treeId: String(treeId)
-    }
-  });
-}
-
-async function handleTreeSelect(value: string | number | null | undefined) {
-  const treeId = Number(value);
-  if (!Number.isFinite(treeId) || treeId <= 0) {
-    return;
-  }
-  selectedTreeId.value = treeId;
-  await syncTreeQuery(treeId);
-  await reloadAnalytics();
-}
-
-async function loadTrees() {
-  loadingTrees.value = true;
-  feedback.value = "";
-  try {
-    const response = await fetchFamilyTrees(1, 100);
-    trees.value = response.data.items;
-    const queryTreeId = Number(route.query.treeId);
-    selectedTreeId.value =
-      Number.isFinite(queryTreeId) && queryTreeId > 0 ? queryTreeId : trees.value[0]?.tree_id ?? 0;
-    if (selectedTreeId.value) {
-      await reloadAnalytics();
-    }
-  } catch (error) {
-    feedbackType.value = "error";
-    feedback.value = errorMessage(error, "族谱列表加载失败，请稍后重试。");
-  } finally {
-    loadingTrees.value = false;
-  }
 }
 
 async function loadDashboard(treeId: number) {
@@ -452,5 +376,13 @@ async function reloadAnalytics() {
   ]);
 }
 
-onMounted(loadTrees);
+watch(
+  selectedTreeId,
+  (treeId) => {
+    if (treeId) {
+      void reloadAnalytics();
+    }
+  },
+  { immediate: true }
+);
 </script>
