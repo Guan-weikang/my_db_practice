@@ -55,12 +55,13 @@ def test_stage7_generator_can_build_small_dataset_with_life_rules():
     summary = summarize_dataset(dataset)
 
     assert summary["family_tree"] == 3
-    assert summary["member"] == 390
+    assert summary["member"] == 405
     assert summary["user_account"] == 3
     assert summary["tree_collaborator"] == 6
     assert summary["parent_child"] > 0
     assert summary["marriage"] > 0
     assert summary["member_provenance"] == summary["member"]
+    assert sum(1 for row in dataset["member_provenance"] if row["rule_profile"] == "stage7_unmarried_elder_male_sample") == 15
 
     member_ids = {row["member_id"] for row in dataset["member"]}
     tree_ids = {row["tree_id"] for row in dataset["family_tree"]}
@@ -84,6 +85,23 @@ def test_stage7_generator_can_build_small_dataset_with_life_rules():
             death_year = int(row["death_date"][:4])
             assert death_year >= birth_year
             assert death_year <= 2025
+
+    married_member_ids = {
+        int(row["member_id_1"])
+        for row in dataset["marriage"]
+    } | {
+        int(row["member_id_2"])
+        for row in dataset["marriage"]
+    }
+    unmarried_elder_males = [
+        row
+        for row in dataset["member"]
+        if row["gender"] == "male"
+        and row["is_alive"] == "true"
+        and 2026 - int(row["birth_date"][:4]) > 50
+        and int(row["member_id"]) not in married_member_ids
+    ]
+    assert len(unmarried_elder_males) >= 15
 
     assert dead_count > summary["member"] // 2
     assert alive_over_90 <= 2

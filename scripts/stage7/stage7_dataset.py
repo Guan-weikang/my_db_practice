@@ -20,6 +20,7 @@ DEFAULT_TREE_ID_START = 7001
 DEFAULT_MEMBER_ID_START = 1000001
 DEFAULT_RANDOM_SEED = 20260513
 CURRENT_YEAR = 2026
+UNMARRIED_ELDER_MALE_PER_TREE = 5
 PASSWORD123_HASH = "$argon2id$v=19$m=65536,t=3,p=4$TvtS/znYf4UUnty9hmDdPQ$KYQ+1IAxobgmLJvo46lOfQR1kpp9HRkuUlClDLA9tRU"
 
 MALE_GIVEN_PARTS = ["伟", "强", "明", "国", "文", "成", "德", "世", "承", "宗", "景", "安"]
@@ -166,6 +167,23 @@ def _life_profile(birth_year: int, rng: random.Random, current_year: int = CURRE
     death_age = max(18, min(max_age, death_age))
     death_year = min(current_year - 1, birth_year + death_age)
     return False, _format_date(death_year, 12, 31)
+
+
+def _make_unmarried_elder_male_row(*, member_id: int, tree_id: int, spec: TreeSpec, index: int) -> dict[str, Any]:
+    generation_no = max(1, spec.target_generations - 3)
+    birth_year = CURRENT_YEAR - 60 - index
+    return {
+        "member_id": member_id,
+        "tree_id": tree_id,
+        "name": f"{spec.surname}未婚长者{index + 1}",
+        "gender": "male",
+        "birth_date": _format_date(birth_year, 6, 1),
+        "death_date": "",
+        "generation_no": generation_no,
+        "generation_name": _generation_token(generation_no),
+        "biography": f"Stage7 unmarried elder male sample for {spec.display_name}.",
+        "is_alive": "true",
+    }
 
 
 def _make_user_rows() -> list[dict[str, Any]]:
@@ -351,6 +369,29 @@ def generate_dataset(
                             "status": status,
                         }
                     )
+
+        for elder_index in range(UNMARRIED_ELDER_MALE_PER_TREE):
+            member_id = next_member_id
+            next_member_id += 1
+            row = _make_unmarried_elder_male_row(
+                member_id=member_id,
+                tree_id=tree_id,
+                spec=spec,
+                index=elder_index,
+            )
+            dataset["member"].append(row)
+            dataset["member_provenance"].append(
+                {
+                    "member_id": member_id,
+                    "tree_id": tree_id,
+                    "tree_code": spec.tree_code,
+                    "node_type": "generated",
+                    "historical_real": "false",
+                    "rule_profile": "stage7_unmarried_elder_male_sample",
+                    "latest_generation_birth_year": spec.latest_generation_birth_year,
+                    "generation_gap": spec.generation_gap,
+                }
+            )
 
     return dataset
 
