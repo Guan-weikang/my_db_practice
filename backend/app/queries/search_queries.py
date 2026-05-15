@@ -1,5 +1,5 @@
 MEMBER_SEARCH_QUERY = """
-WITH matched_members AS (
+WITH candidate_members AS (
     SELECT
         m.member_id,
         m.tree_id,
@@ -10,54 +10,62 @@ WITH matched_members AS (
         m.is_alive,
         m.generation_no,
         m.generation_name,
-        MAX(CASE WHEN pc.parent_role = 'father' THEN p.name END) AS father_name,
-        MAX(CASE WHEN pc.parent_role = 'mother' THEN p.name END) AS mother_name,
         CASE
             WHEN LOWER(m.name) = LOWER(:keyword) THEN 0
             WHEN LOWER(m.name) LIKE LOWER(:keyword_prefix) THEN 1
             ELSE 2
         END AS match_priority
     FROM member m
-    LEFT JOIN parent_child pc
-      ON pc.tree_id = m.tree_id
-     AND pc.child_member_id = m.member_id
-    LEFT JOIN member p
-      ON p.tree_id = pc.tree_id
-     AND p.member_id = pc.parent_member_id
     WHERE m.tree_id = :tree_id
       AND m.name ILIKE '%' || :keyword || '%'
-    GROUP BY
-        m.member_id,
-        m.tree_id,
-        m.name,
-        m.gender,
-        m.birth_date,
-        m.death_date,
-        m.is_alive,
-        m.generation_no,
-        m.generation_name
+),
+ranked_members AS (
+    SELECT
+        candidate_members.*,
+        COUNT(*) OVER() AS total_count
+    FROM candidate_members
+    ORDER BY
+        match_priority ASC,
+        generation_no ASC NULLS LAST,
+        birth_date ASC NULLS LAST,
+        member_id ASC
+    OFFSET :offset
+    LIMIT :limit
+),
+parent_names AS (
+    SELECT
+        pc.child_member_id AS member_id,
+        MAX(CASE WHEN pc.parent_role = 'father' THEN p.name END) AS father_name,
+        MAX(CASE WHEN pc.parent_role = 'mother' THEN p.name END) AS mother_name
+    FROM parent_child pc
+    JOIN member p
+      ON p.tree_id = pc.tree_id
+     AND p.member_id = pc.parent_member_id
+    WHERE pc.tree_id = :tree_id
+      AND pc.child_member_id IN (SELECT member_id FROM ranked_members)
+    GROUP BY pc.child_member_id
 )
 SELECT
-    member_id,
-    tree_id,
-    name,
-    gender,
-    birth_date,
-    death_date,
-    is_alive,
-    generation_no,
-    generation_name,
-    father_name,
-    mother_name,
-    COUNT(*) OVER() AS total_count
-FROM matched_members
+    ranked_members.member_id,
+    ranked_members.tree_id,
+    ranked_members.name,
+    ranked_members.gender,
+    ranked_members.birth_date,
+    ranked_members.death_date,
+    ranked_members.is_alive,
+    ranked_members.generation_no,
+    ranked_members.generation_name,
+    parent_names.father_name,
+    parent_names.mother_name,
+    ranked_members.total_count
+FROM ranked_members
+LEFT JOIN parent_names
+  ON parent_names.member_id = ranked_members.member_id
 ORDER BY
-    match_priority ASC,
-    generation_no ASC NULLS LAST,
-    birth_date ASC NULLS LAST,
-    member_id ASC
-OFFSET :offset
-LIMIT :limit;
+    ranked_members.match_priority ASC,
+    ranked_members.generation_no ASC NULLS LAST,
+    ranked_members.birth_date ASC NULLS LAST,
+    ranked_members.member_id ASC;
 """
 
 

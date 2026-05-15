@@ -149,6 +149,9 @@ ON member(tree_id, name);
 CREATE INDEX IF NOT EXISTS idx_member_tree_generation
 ON member(tree_id, generation_no);
 
+CREATE INDEX IF NOT EXISTS idx_member_tree_generation_birth_member
+ON member(tree_id, generation_no ASC NULLS LAST, birth_date ASC NULLS LAST, member_id ASC);
+
 CREATE INDEX IF NOT EXISTS idx_member_tree_gender_birth
 ON member(tree_id, gender, birth_date);
 
@@ -163,6 +166,14 @@ ON marriage(tree_id, member_id_1);
 
 CREATE INDEX IF NOT EXISTS idx_marriage_tree_member2
 ON marriage(tree_id, member_id_2);
+
+CREATE INDEX IF NOT EXISTS idx_marriage_tree_member1_active
+ON marriage(tree_id, member_id_1)
+WHERE status = 'active';
+
+CREATE INDEX IF NOT EXISTS idx_marriage_tree_member2_active
+ON marriage(tree_id, member_id_2)
+WHERE status = 'active';
 
 CREATE INDEX IF NOT EXISTS idx_member_name_trgm
 ON member USING gin (name gin_trgm_ops);

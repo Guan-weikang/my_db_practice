@@ -5,7 +5,7 @@
 - `backend/`：FastAPI + SQLAlchemy 2.0 后端骨架
 - `frontend/`：Vue 3 + Vite 前端骨架
 - `docs/`：需求、数据库、架构、计划与阶段执行文档
-- `deploy/`：后续 Docker、Nginx 与部署配置目录
+- `deploy/`：预留的部署说明目录
 - `scripts/`：数据生成与导入脚本目录
 - `data/`：数据文件目录
 
@@ -97,55 +97,6 @@ cd frontend
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-## Docker 部署
-
-当前仓库已补齐演示级容器化部署：
-
-- `docker-compose.yml`
-- `backend/Dockerfile`
-- `frontend/Dockerfile`
-- `deploy/nginx/default.conf`
-- `.env.compose.example`
-
-推荐步骤：
-
-```bash
-cp .env.compose.example .env
-docker compose up --build -d
-```
-
-访问入口：
-
-- 前端与统一入口：`http://localhost`
-- 后端健康检查：`http://localhost/api/v1/health/`
-
-说明：
-
-- `nginx` 是唯一对外入口，前端通过它访问 `/api/v1`
-- `backend` 容器启动时会先执行 `alembic upgrade head`
-- `postgres` 与 `redis` 使用命名卷持久化
-- 如需改端口或密钥，修改根目录 `.env`
-
-导入 Stage7 演示数据：
-
-```bash
-docker compose --profile tools run --rm stage7-import
-```
-
-这条命令会：
-
-- 连接容器内 `postgres` 与 `redis`
-- 清理旧的 Stage7 数据
-- 从 `data/stage7/generated/*.csv` 重新导入 10 棵演示族谱
-- 清理 `cache:v1:*` Redis 缓存键
-
-停止与清理：
-
-```bash
-docker compose down
-docker compose down -v
-```
-
 阶段二前端认证主流程：
 
 1. 访问受保护路由时，未登录会自动跳转到 `/auth/login?redirect=原目标路径`
@@ -203,7 +154,7 @@ bash /home/mochen/db_practice/scripts/dev/stage3_probe.sh
 - `scripts/sql/`：数据库初始化 SQL 脚本
 - `scripts/dev/seed_stage3_manual_test_data.py`：阶段三联调种子数据脚本
 - `scripts/dev/stage3_probe.sh`：阶段三接口与权限快速探测脚本
-- `deploy/`：当前为空目录，留待后续阶段补充 Docker Compose、Nginx 和部署文件
+- `deploy/`：当前保留为部署说明预留目录
 - `docs/寻根溯源族谱管理系统-总开发计划.md`：总开发计划
 - `docs/阶段一-工程基线与开发环境收口-详细执行与测试验收文档.md`：阶段一详细计划
 - `docs/阶段三-族谱与协作者模块-详细执行与测试验收文档.md`：阶段三详细计划

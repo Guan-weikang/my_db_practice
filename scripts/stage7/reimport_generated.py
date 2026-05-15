@@ -91,6 +91,16 @@ def _set_replication_role(connection: psycopg.Connection, role: str) -> None:
     connection.commit()
 
 
+def _analyze_stage7_tables(connection: psycopg.Connection) -> None:
+    table_names = ["user_account", "family_tree", "tree_collaborator", "member", "parent_child", "marriage"]
+    with connection.cursor() as cursor:
+        for table_name in table_names:
+            if not _table_exists(connection, table_name):
+                continue
+            cursor.execute(f"ANALYZE {table_name}")
+    connection.commit()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Reimport Stage7 generated CSV files into PostgreSQL.")
     parser.add_argument("--input-dir", type=Path, default=GENERATED_DIR)
@@ -132,6 +142,9 @@ def main() -> None:
             if replication_role_enabled:
                 _set_replication_role(connection, "origin")
                 print("Restored session_replication_role=origin.")
+
+        _analyze_stage7_tables(connection)
+        print("Analyzed Stage7 tables after import.")
 
     if not args.skip_redis_clear:
         _clear_redis_cache(args.redis_url)
