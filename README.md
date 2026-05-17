@@ -77,6 +77,36 @@ npm install
 
 ## 启动项目
 
+### Docker Compose 一键启动
+
+项目已提供完整 Docker Compose 编排：
+
+```bash
+docker compose up --build -d
+```
+
+默认入口：
+
+```text
+http://localhost:18080/
+```
+
+Compose 会启动 PostgreSQL、Redis、数据库初始化任务、FastAPI 后端、Vue 前端和 Nginx。首次启动时会导入根目录的 `family_tree_db_dump.sql`，并针对 `parent_child` 表上的慢触发器提供导入前禁用、导入后恢复的保护逻辑。详细说明见 `deploy/README.md`。
+
+停止服务但保留数据库数据：
+
+```bash
+docker compose down
+```
+
+停止并删除数据库卷：
+
+```bash
+docker compose down -v
+```
+
+### 本机开发启动
+
 后端需要在 `backend/` 目录下运行，这样 `app.*` 导入和 `.env` 读取路径才是正确的：
 
 ```bash

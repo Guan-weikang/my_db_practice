@@ -1,0 +1,14 @@
+.git
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.venv
+**/node_modules
+frontend/dist
+data/stage7/exports
+data/stage7/generated
+data/stage7/reports
+*.pyc
+*.pyo
+*.log
