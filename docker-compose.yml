@@ -1,43 +1,67 @@
 services:
   postgres:
     image: postgres:17
-    container_name: family-tree-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-family_tree_db}
       POSTGRES_USER: ${POSTGRES_USER:-family_tree_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-family_tree_password}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-family_tree_user} -d ${POSTGRES_DB:-family_tree_db}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
       timeout: 5s
-      retries: 10
-    networks:
-      - family_tree_network
+      retries: 30
 
   redis:
     image: redis:7.4
-    container_name: family-tree-redis
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    restart: unless-stopped
     volumes:
       - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 10
-    networks:
-      - family_tree_network
+      retries: 30
+
+  db-init:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-family_tree_db}
+      POSTGRES_USER: ${POSTGRES_USER:-family_tree_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-family_tree_password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-family_tree_user}:${POSTGRES_PASSWORD:-family_tree_password}@postgres:5432/${POSTGRES_DB:-family_tree_db}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-access-secret}
+      JWT_REFRESH_SECRET_KEY: ${JWT_REFRESH_SECRET_KEY:-change-me-refresh-secret}
+      IMPORT_DUMP_ON_EMPTY_DB: ${IMPORT_DUMP_ON_EMPTY_DB:-1}
+      IMPORT_DUMP_PATH: /seed/family_tree_db_dump.sql
+      DISABLE_SLOW_TRIGGER_DURING_IMPORT: ${DISABLE_SLOW_TRIGGER_DURING_IMPORT:-1}
+      SLOW_TRIGGER_TABLE: ${SLOW_TRIGGER_TABLE:-public.parent_child}
+      SLOW_TRIGGER_NAME: ${SLOW_TRIGGER_NAME:-trg_prevent_parent_child_cycle}
+    volumes:
+      - ./family_tree_db_dump.sql:/seed/family_tree_db_dump.sql:ro
+    command: ["/app/deploy/scripts/db-init.sh"]
 
   backend:
     build:
       context: .
-      dockerfile: ./backend/Dockerfile
-    container_name: family-tree-backend
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     environment:
       APP_NAME: ${APP_NAME:-Family Tree API}
       APP_ENV: ${APP_ENV:-production}
@@ -51,86 +75,58 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost,http://127.0.0.1}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     expose:
       - "8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/"]
-      interval: 15s
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/v1/health/ >/dev/null"]
+      interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 20s
-    networks:
-      - family_tree_network
-
-  stage7-import:
-    build:
-      context: .
-      dockerfile: ./backend/Dockerfile
-    container_name: family-tree-stage7-import
-    profiles:
-      - tools
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-family_tree_user}:${POSTGRES_PASSWORD:-family_tree_password}@postgres:5432/${POSTGRES_DB:-family_tree_db}
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
-    working_dir: /workspace
-    command: ["sh", "/workspace/scripts/stage7/reimport_generated.sh"]
-    volumes:
-      - .:/workspace
-    networks:
-      - family_tree_network
+      retries: 12
 
   frontend:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
-    container_name: family-tree-frontend
-    expose:
-      - "80"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-    networks:
-      - family_tree_network
-
-  nginx:
-    image: nginx:1.28-alpine
-    container_name: family-tree-nginx
+    restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
+    expose:
+      - "80"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
       frontend:
+        condition: service_started
+      backend:
         condition: service_healthy
     ports:
       - "${NGINX_PORT:-80}:80"
     volumes:
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-    networks:
-      - family_tree_network
+
+  postgres-port:
+    image: alpine:3.20
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "apk add --no-cache socat >/dev/null && socat tcp-listen:5432,fork,reuseaddr tcp-connect:postgres:5432"]
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+
+  redis-port:
+    image: alpine:3.20
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["sh", "-c", "apk add --no-cache socat >/dev/null && socat tcp-listen:6379,fork,reuseaddr tcp-connect:redis:6379"]
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
 
 volumes:
   postgres_data:
   redis_data:
-
-networks:
-  family_tree_network:
-    driver: bridge

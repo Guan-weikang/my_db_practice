@@ -40,7 +40,7 @@ export interface FamilyTreeUpdatePayload {
 }
 
 export function fetchFamilyTrees(page = 1, pageSize = 20) {
-  return client.get<PaginatedFamilyTreeResponse>("/family-trees", {
+  return client.get<PaginatedFamilyTreeResponse>("/family-trees/", {
     params: {
       page,
       page_size: pageSize
@@ -53,7 +53,7 @@ export function fetchFamilyTreeDetail(treeId: number) {
 }
 
 export function createFamilyTree(payload: FamilyTreeCreatePayload) {
-  return client.post<FamilyTreeDetailResponse>("/family-trees", payload);
+  return client.post<FamilyTreeDetailResponse>("/family-trees/", payload);
 }
 
 export function updateFamilyTree(treeId: number, payload: FamilyTreeUpdatePayload) {

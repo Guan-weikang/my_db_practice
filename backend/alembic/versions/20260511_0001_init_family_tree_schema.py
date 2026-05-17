@@ -102,6 +102,12 @@ def upgrade() -> None:
     )
     op.create_index("idx_member_tree_name", "member", ["tree_id", "name"], unique=False)
     op.create_index("idx_member_tree_generation", "member", ["tree_id", "generation_no"], unique=False)
+    op.create_index(
+        "idx_member_tree_generation_birth_member",
+        "member",
+        ["tree_id", sa.text("generation_no ASC NULLS LAST"), sa.text("birth_date ASC NULLS LAST"), "member_id"],
+        unique=False,
+    )
     op.create_index("idx_member_tree_gender_birth", "member", ["tree_id", "gender", "birth_date"], unique=False)
     op.create_index(
         "idx_member_name_trgm",
@@ -161,6 +167,20 @@ def upgrade() -> None:
     )
     op.create_index("idx_marriage_tree_member1", "marriage", ["tree_id", "member_id_1"], unique=False)
     op.create_index("idx_marriage_tree_member2", "marriage", ["tree_id", "member_id_2"], unique=False)
+    op.create_index(
+        "idx_marriage_tree_member1_active",
+        "marriage",
+        ["tree_id", "member_id_1"],
+        unique=False,
+        postgresql_where=sa.text("status = 'active'"),
+    )
+    op.create_index(
+        "idx_marriage_tree_member2_active",
+        "marriage",
+        ["tree_id", "member_id_2"],
+        unique=False,
+        postgresql_where=sa.text("status = 'active'"),
+    )
 
     op.execute(
         """
@@ -227,6 +247,8 @@ def downgrade() -> None:
 
     op.drop_index("idx_marriage_tree_member2", table_name="marriage")
     op.drop_index("idx_marriage_tree_member1", table_name="marriage")
+    op.drop_index("idx_marriage_tree_member2_active", table_name="marriage")
+    op.drop_index("idx_marriage_tree_member1_active", table_name="marriage")
     op.drop_table("marriage")
 
     op.drop_index("idx_parent_child_tree_child", table_name="parent_child")
@@ -235,6 +257,7 @@ def downgrade() -> None:
 
     op.drop_index("idx_member_name_trgm", table_name="member")
     op.drop_index("idx_member_tree_gender_birth", table_name="member")
+    op.drop_index("idx_member_tree_generation_birth_member", table_name="member")
     op.drop_index("idx_member_tree_generation", table_name="member")
     op.drop_index("idx_member_tree_name", table_name="member")
     op.drop_table("member")
